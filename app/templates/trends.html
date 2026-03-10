@@ -28,23 +28,197 @@
       </div>
     </div>
   </div>
+  
+  <!-- Predefined Hero Topic Cards -->
+  <style>
+    .hero-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+    .hero-card {
+      position: relative;
+      border-radius: 16px;
+      overflow: hidden;
+      height: 180px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all 0.3s ease;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .hero-card:hover, .hero-card.active {
+      transform: translateY(-5px);
+      border-color: var(--accent-cyan);
+      box-shadow: 0 10px 40px rgba(0, 242, 254, 0.3);
+    }
+    .hero-bg {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background-size: cover;
+      background-position: center;
+      transition: transform 0.5s ease;
+    }
+    .hero-card:hover .hero-bg {
+      transform: scale(1.05);
+    }
+    .hero-overlay {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: linear-gradient(to top, rgba(15,23,42,0.95) 0%, rgba(15,23,42,0.4) 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 1.5rem;
+    }
+    .hero-title {
+      color: #fff;
+      margin: 0;
+      font-size: 1.4rem;
+      font-weight: 700;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+    }
+    .hero-badge {
+      font-size: 0.8rem;
+      color: var(--accent-cyan);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-top: 4px;
+    }
+  </style>
+
+  <div style="margin-top: 3rem;">
+    <h2 style="color: #fff; font-size: 1.5rem; font-weight: 600; margin-bottom: 0.5rem;">Explore Featured Topics</h2>
+    <p style="color: var(--text-muted); margin-bottom: 2rem;">Select a pre-analyzed topic below to instantly view its comprehensive sentiment report.</p>
+    
+    <div class="hero-grid">
+      {% set presets = [
+        ("Donald Trump", "donaldtrump.png"),
+        ("The Boys", "theboys.png"),
+        ("Avengers Doomsday", "avengersdoomsday.png"),
+        ("Macbook Neo", "macbookneo.png"),
+        ("America vs Iran", "americavsiran.png")
+      ] %}
+      {% for pt, img in presets %}
+      <form method="POST" action="{{ url_for('main.trends') }}" style="margin: 0; padding: 0;">
+        <input type="hidden" name="topic" value="{{ pt }}">
+        <button type="submit" class="hero-card {{ 'active' if current_topic == pt else '' }}" style="width: 100%; text-align: left; padding: 0; background: none;" onclick="document.body.style.cursor='wait';">
+          <div class="hero-bg" style="background-image: url('{{ url_for('static', filename='images/' ~ img) }}');"></div>
+          <div class="hero-overlay">
+            <h3 class="hero-title">{{ pt }}</h3>
+            <span class="hero-badge">Instant Report &rarr;</span>
+          </div>
+        </button>
+      </form>
+      {% endfor %}
+    </div>
+  </div>
+
 </div>
 
+{% if current_topic %}
 <div class="trends-container">
+
+  <div class="analyst-report-header" style="width: 100%; margin-top: 2rem; padding-bottom: 2rem; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 3rem;">
+    <h2 style="font-size: 2.2rem; color: #fff; margin-bottom: 0.5rem;">Sentiment Report: <span style="color: var(--accent-cyan);">{{ current_topic }}</span></h2>
+    <p style="color: var(--text-muted); font-size: 1.1rem; max-width: 800px;">Below is the executive summary and detailed emotional breakdown derived directly from thousands of Reddit interactions.</p>
+  </div>
+
+  <!-- Reddit Highlights -->
+  {% if top_positive or top_negative %}
+  <style>
+    .reddit-card {
+      background: #1A1A1B;
+      border: 1px solid #343536;
+      border-radius: 4px;
+      padding: 12px;
+      margin-bottom: 1rem;
+      display: flex;
+      gap: 12px;
+      transition: border-color 0.2s;
+    }
+    .reddit-card:hover { border-color: #818384; }
+    .reddit-votes {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      color: #D7DADC;
+      font-weight: bold;
+      font-size: 14px;
+      width: 40px;
+      flex-shrink: 0;
+    }
+    .r-up { color: #FF4500; font-size: 20px; line-height: 1; margin-bottom: -4px;}
+    .r-down { color: #7193FF; font-size: 20px; line-height: 1; margin-top: -4px;}
+    .r-content { display: flex; flex-direction: column; gap: 8px; flex-grow: 1; overflow: hidden; }
+    .r-meta { font-size: 12px; color: #818384; display: flex; align-items: center; gap: 6px; }
+    .r-author { color: #D7DADC; font-weight: 500; }
+    .r-text { color: #D7DADC; font-size: 14px; line-height: 21px; word-break: break-word; }
+    .r-badge-pos { color: #10B981; border: 1px solid #10B981; border-radius: 20px; padding: 2px 8px; font-size: 11px; font-weight: bold; text-transform: uppercase;}
+    .r-badge-neg { color: #EF4444; border: 1px solid #EF4444; border-radius: 20px; padding: 2px 8px; font-size: 11px; font-weight: bold; text-transform: uppercase;}
+  </style>
+
+  <div style="width: 100%; margin-bottom: 4rem;">
+    <h3 style="color: #fff; margin-bottom: 1.5rem; font-size: 1.4rem;">Top Community Voices</h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 2rem;">
+      
+      {% if top_positive %}
+      <div>
+        <h4 style="color: var(--text-muted); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 1rem;">Most Viral Support</h4>
+        <div class="reddit-card">
+          <div class="reddit-votes">
+            <span class="r-up">▲</span>
+            <span>{{ top_positive.score }}</span>
+            <span class="r-down" style="color: #818384;">▼</span>
+          </div>
+          <div class="r-content">
+            <div class="r-meta">
+              <span>Posted by</span> <span class="r-author">u/{{ top_positive.author }}</span>
+              <span class="r-badge-pos">High Positive ({{ "%.0f"|format(top_positive.confidence_score * 100) }}%)</span>
+            </div>
+            <div class="r-text">{{ top_positive.text }}</div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if top_negative %}
+      <div>
+        <h4 style="color: var(--text-muted); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 1rem;">Most Viral Criticism</h4>
+        <div class="reddit-card">
+          <div class="reddit-votes">
+            <span class="r-up">▲</span>
+            <span>{{ top_negative.score }}</span>
+            <span class="r-down" style="color: #818384;">▼</span>
+          </div>
+          <div class="r-content">
+            <div class="r-meta">
+              <span>Posted by</span> <span class="r-author">u/{{ top_negative.author }}</span>
+              <span class="r-badge-neg">High Negative ({{ "%.0f"|format(top_negative.confidence_score * 100) }}%)</span>
+            </div>
+            <div class="r-text">{{ top_negative.text }}</div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+  {% endif %}
 
   <!-- Chart 1: Overall Sentiment -->
   <div class="chart-card">
     <div class="chart-header">
       <h3 class="chart-title">1. Overall Sentiment Split</h3>
-      <div class="info-btn" tabindex="0">i
-        <div class="info-tooltip">
-          <strong>What this shows:</strong> This doughnut chart divides all analyzed posts into Positive, Negative, and Neutral categories.<br/><br/>
-          <strong>Meaning:</strong> Gives you an immediate macro-view of the general public mood. A massive negative slice indicates widespread discontent.
-        </div>
-      </div>
     </div>
-    <div class="chart-body">
-      <canvas id="chart1"></canvas>
+    <div class="chart-content-wrapper">
+      <div class="analyst-box">
+        <strong>Analyst Insight:</strong> Provides an immediate macroscopic view of the general public mood. A dominant red slice strongly indicates widespread discontent, while green shows broad approval.
+      </div>
+      <div class="chart-body">
+        <canvas id="chart1"></canvas>
+      </div>
     </div>
   </div>
 
@@ -52,63 +226,59 @@
   <div class="chart-card wide">
     <div class="chart-header">
       <h3 class="chart-title">2. Sentiment Timeline (Daily Volume)</h3>
-      <div class="info-btn" tabindex="0">i
-        <div class="info-tooltip">
-          <strong>What this shows:</strong> Traces the number of posts for each sentiment category day by day.<br/><br/>
-          <strong>Meaning:</strong> Helps identify specific spikes in emotion. For example, a sudden peak in negative posts likely correlates to a real-world controversial event on that date.
-        </div>
-      </div>
     </div>
-    <div class="chart-body">
-      <canvas id="chart2"></canvas>
+    <div class="chart-content-wrapper">
+      <div class="analyst-box">
+        <strong>Analyst Insight:</strong> Traces emotion patterns day-by-day. Use this to pinpoint exactly when the public mood shifted. A sudden viral spike in negative posts directly correlates to a controversial real-world event breaking on that specific date.
+      </div>
+      <div class="chart-body">
+        <canvas id="chart2"></canvas>
+      </div>
     </div>
   </div>
 
   <!-- Chart 3: Avg Upvotes by Sentiment -->
   <div class="chart-card">
     <div class="chart-header">
-      <h3 class="chart-title">3. Average Upvotes by Emotion</h3>
-      <div class="info-btn" tabindex="0">i
-        <div class="info-tooltip">
-          <strong>What this shows:</strong> The average upvote score received by posts, grouped by their sentiment.<br/><br/>
-          <strong>Meaning:</strong> Reveals what type of content the community rewards. If negative posts have the highest average, the platform heavily incentivizes outrage or critical discussion.
-        </div>
-      </div>
+      <h3 class="chart-title">3. Average Engagement by Emotion</h3>
     </div>
-    <div class="chart-body">
-      <canvas id="chart3"></canvas>
+    <div class="chart-content-wrapper">
+      <div class="analyst-box">
+        <strong>Analyst Insight:</strong> Reveals what type of content the community rewards with upvotes. If the red bar is highest, the platform mathematically is incentivizing users to post outrage and criticism to gain visibility.
+      </div>
+      <div class="chart-body">
+        <canvas id="chart3"></canvas>
+      </div>
     </div>
   </div>
 
   <!-- Chart 4: Engagement Scatter -->
   <div class="chart-card">
     <div class="chart-header">
-      <h3 class="chart-title">4. Positivity vs. Engagement</h3>
-      <div class="info-btn" tabindex="0">i
-        <div class="info-tooltip">
-          <strong>What this shows:</strong> Scatter plot comparing a post's positive AI probability score (X-axis) against its upvote score (Y-axis).<br/><br/>
-          <strong>Meaning:</strong> Identifies if highly positive posts systematically go viral, or if high engagement is clustered around lower positivity (controversy).
-        </div>
-      </div>
+      <h3 class="chart-title">4. Positivity vs. Viral Engagement</h3>
     </div>
-    <div class="chart-body">
-      <canvas id="chart4"></canvas>
+    <div class="chart-content-wrapper">
+      <div class="analyst-box">
+        <strong>Analyst Insight:</strong> Evaluates if happy posts actually go viral. If most dots are clustered on the left side (0.0 to 0.4 Positivity) but are high up, it proves that "Good News" doesn't sell—controversy drives engagement here.
+      </div>
+      <div class="chart-body">
+        <canvas id="chart4"></canvas>
+      </div>
     </div>
   </div>
 
   <!-- Chart 5: Top 10 Posts -->
   <div class="chart-card wide">
     <div class="chart-header">
-      <h3 class="chart-title">5. Top 10 Most Viral Posts Profile</h3>
-      <div class="info-btn" tabindex="0">i
-        <div class="info-tooltip">
-          <strong>What this shows:</strong> The upvote scores and assigned sentiment of the 10 absolute most popular posts in the dataset.<br/><br/>
-          <strong>Meaning:</strong> Highlights the extreme outliers. The tone of these top 10 posts often sets the culture for the entire community.
-        </div>
-      </div>
+      <h3 class="chart-title">5. Top 10 Most Viral Posts Context</h3>
     </div>
-    <div class="chart-body">
-      <canvas id="chart5"></canvas>
+    <div class="chart-content-wrapper">
+      <div class="analyst-box">
+        <strong>Analyst Insight:</strong> Highlights the extreme outliers. The tone of these top 10 mega-viral posts often sets the culture for the entire community. Are the biggest influencers optimistic or completely toxic?
+      </div>
+      <div class="chart-body">
+        <canvas id="chart5"></canvas>
+      </div>
     </div>
   </div>
 
@@ -116,163 +286,154 @@
   <div class="chart-card">
     <div class="chart-header">
       <h3 class="chart-title">6. Sentiment Volatility Index</h3>
-      <div class="info-btn" tabindex="0">i
-        <div class="info-tooltip">
-          <strong>What this shows:</strong> The standard deviation (variance) of positive sentiment day-by-day.<br/><br/>
-          <strong>Meaning:</strong> Peaks indicate days of extreme polarization where users were heavily split between intense joy and intense anger. Flat lines indicate uniform consensus.
-        </div>
-      </div>
     </div>
-    <div class="chart-body">
-      <canvas id="chart6"></canvas>
+    <div class="chart-content-wrapper">
+      <div class="analyst-box">
+        <strong>Analyst Insight:</strong> Tracks emotional turbulence. Massive spikes indicate days of extreme polarization where users were heavily split in intense warfare. Flat, low lines indicate boring, uniform consensus.
+      </div>
+      <div class="chart-body">
+        <canvas id="chart6"></canvas>
+      </div>
     </div>
   </div>
 
   <!-- Chart 7: Negative Intensity -->
   <div class="chart-card">
     <div class="chart-header">
-      <h3 class="chart-title">7. Negative Intensity Distribution</h3>
-      <div class="info-btn" tabindex="0">i
-        <div class="info-tooltip">
-          <strong>What this shows:</strong> Groups negative scores into severity brackets (0.0 to 1.0 probability).<br/><br/>
-          <strong>Meaning:</strong> Determines if negative posts are just mildly critical (lower scores) or intensely furious/toxic (scores closer to 1.0).
-        </div>
-      </div>
+      <h3 class="chart-title">7. Toxicity vs Criticism</h3>
     </div>
-    <div class="chart-body">
-      <canvas id="chart7"></canvas>
+    <div class="chart-content-wrapper">
+      <div class="analyst-box">
+        <strong>Analyst Insight:</strong> Groups negative scores into severity brackets. Determines if negative posts are just mildly critical (0.5 to 0.7 probability) or intensely furious and toxic (0.8 to 1.0 probability).
+      </div>
+      <div class="chart-body">
+        <canvas id="chart7"></canvas>
+      </div>
     </div>
   </div>
 
   <!-- Chart 8: Positive Intensity -->
   <div class="chart-card">
     <div class="chart-header">
-      <h3 class="chart-title">8. Positive Intensity Distribution</h3>
-      <div class="info-btn" tabindex="0">i
-        <div class="info-tooltip">
-          <strong>What this shows:</strong> Groups positive scores into severity brackets.<br/><br/>
-          <strong>Meaning:</strong> Shows if optimistic posts are just mildly agreeable or fiercely enthusiastic and supportive.
-        </div>
-      </div>
+      <h3 class="chart-title">8. Enthusiasm vs Agreement</h3>
     </div>
-    <div class="chart-body">
-      <canvas id="chart8"></canvas>
+    <div class="chart-content-wrapper">
+      <div class="analyst-box">
+        <strong>Analyst Insight:</strong> Groups positive scores into severity brackets. Shows if the community's optimistic posts are just mildly agreeable or fiercely enthusiastic, blindly supportive, and loyal.
+      </div>
+      <div class="chart-body">
+        <canvas id="chart8"></canvas>
+      </div>
     </div>
   </div>
 
   <!-- Chart 9: Neutral Dominance -->
   <div class="chart-card wide">
     <div class="chart-header">
-      <h3 class="chart-title">9. Informational (Neutral) Volume</h3>
-      <div class="info-btn" tabindex="0">i
-        <div class="info-tooltip">
-          <strong>What this shows:</strong> The outright volume of purely neutral/objective posts over time.<br/><br/>
-          <strong>Meaning:</strong> Tracks the flow of unbiased news and factual reporting during the election period, separating it from opinionated rhetoric.
-        </div>
-      </div>
+      <h3 class="chart-title">9. Informational (Neutral) Flow</h3>
     </div>
-    <div class="chart-body">
-      <canvas id="chart9"></canvas>
+    <div class="chart-content-wrapper">
+      <div class="analyst-box">
+        <strong>Analyst Insight:</strong> Tracks the flow of unbiased news, factual reporting, and dry questions over time. By separating this from opinionated rhetoric, we can see if the community is actually discussing facts or just fighting.
+      </div>
+      <div class="chart-body">
+        <canvas id="chart9"></canvas>
+      </div>
     </div>
   </div>
 
   <!-- Chart 10: Hour Volume -->
   <div class="chart-card">
     <div class="chart-header">
-      <h3 class="chart-title">10. Post Volume by Hour</h3>
-      <div class="info-btn" tabindex="0">i
-        <div class="info-tooltip">
-          <strong>What this shows:</strong> Total posts aggregated by the time of day they were published (00:00 - 23:00).<br/><br/>
-          <strong>Meaning:</strong> Reveals the peak active hours for the public to engage in political discussion.
-        </div>
-      </div>
+      <h3 class="chart-title">10. Active Posting Hours</h3>
     </div>
-    <div class="chart-body">
-      <canvas id="chart10"></canvas>
+    <div class="chart-content-wrapper">
+      <div class="analyst-box">
+        <strong>Analyst Insight:</strong> Total posts aggregated by the time of day they were published in UTC. Reveals the peak active hours when the public comes online to engage in the discourse.
+      </div>
+      <div class="chart-body">
+        <canvas id="chart10"></canvas>
+      </div>
     </div>
   </div>
 
   <!-- Chart 11: Probabilities Radar -->
   <div class="chart-card">
     <div class="chart-header">
-      <h3 class="chart-title">11. Systemic AI Probability Baseline</h3>
-      <div class="info-btn" tabindex="0">i
-        <div class="info-tooltip">
-          <strong>What this shows:</strong> A radar chart of the average underlying probability scores (Negative, Neutral, Positive) across the ENTIRE dataset.<br/><br/>
-          <strong>Meaning:</strong> Shows the fundamental baseline bias of the data. Even if a post is classified "Neutral", it might have structural underlying negativity.
-        </div>
-      </div>
+      <h3 class="chart-title">11. Systemic AI Bias Baseline</h3>
     </div>
-    <div class="chart-body">
-      <canvas id="chart11"></canvas>
+    <div class="chart-content-wrapper">
+      <div class="analyst-box">
+        <strong>Analyst Insight:</strong> Exposes the fundamental baseline bias of the data. The AI scores every post. Even if a post is classified as "Neutral", it might have structural underlying negativity radiating throughout the language.
+      </div>
+      <div class="chart-body">
+        <canvas id="chart11"></canvas>
+      </div>
     </div>
   </div>
 
   <!-- Chart 12: Text Length -->
   <div class="chart-card wide">
     <div class="chart-header">
-      <h3 class="chart-title">12. Text Length vs Sentiment</h3>
-      <div class="info-btn" tabindex="0">i
-        <div class="info-tooltip">
-          <strong>What this shows:</strong> Character length of posts (X-axis) plotted against their positivity probability score (Y-axis).<br/><br/>
-          <strong>Meaning:</strong> Answers the question: "Are longer, detailed rants more likely to be deeply negative or highly positive?"
-        </div>
-      </div>
+      <h3 class="chart-title">12. Detail vs Positivity</h3>
     </div>
-    <div class="chart-body">
-      <canvas id="chart12"></canvas>
+    <div class="chart-content-wrapper">
+      <div class="analyst-box">
+        <strong>Analyst Insight:</strong> Compares character length against positivity. Answers the psychological question: "When users write massive, multi-paragraph essays, are they deeply appreciative, or are they writing furiously toxic rants?"
+      </div>
+      <div class="chart-body">
+        <canvas id="chart12"></canvas>
+      </div>
     </div>
   </div>
 
   <!-- Chart 13: Viral Curve -->
   <div class="chart-card">
     <div class="chart-header">
-      <h3 class="chart-title">13. The Viral Curve (Score Distribution)</h3>
-      <div class="info-btn" tabindex="0">i
-        <div class="info-tooltip">
-          <strong>What this shows:</strong> How many posts fall into specific upvote brackets (e.g., 0-10 upvotes, 1k+ upvotes).<br/><br/>
-          <strong>Meaning:</strong> Illustrates the platform's inequality. Typically shows that 95% of posts get ignored while 5% go massively viral.
-        </div>
-      </div>
+      <h3 class="chart-title">13. The Viral Inequality Curve</h3>
     </div>
-    <div class="chart-body">
-      <canvas id="chart13"></canvas>
+    <div class="chart-content-wrapper">
+      <div class="analyst-box">
+        <strong>Analyst Insight:</strong> Illustrates the platform's attention inequality. Typically shows that 95% of posts get completely ignored (0-10 upvotes) while the top 5% go massively viral and monopolize the algorithm's attention.
+      </div>
+      <div class="chart-body">
+        <canvas id="chart13"></canvas>
+      </div>
     </div>
   </div>
 
   <!-- Chart 14: Cumulative -->
   <div class="chart-card">
     <div class="chart-header">
-      <h3 class="chart-title">14. Cumulative Discussion Growth</h3>
-      <div class="info-btn" tabindex="0">i
-        <div class="info-tooltip">
-          <strong>What this shows:</strong> A running total of all posts made over the tracked timeframe.<br/><br/>
-          <strong>Meaning:</strong> The steepness of the curve indicates momentum. A sudden vertical climb means an explosion in public interest.
-        </div>
-      </div>
+      <h3 class="chart-title">14. Compounding Discussion Growth</h3>
     </div>
-    <div class="chart-body">
-      <canvas id="chart14"></canvas>
+    <div class="chart-content-wrapper">
+      <div class="analyst-box">
+        <strong>Analyst Insight:</strong> The steepness of this running-total curve indicates raw momentum. A sudden vertical climb means an explosion in public interest, while a flattening curve means the topic has completely died out.
+      </div>
+      <div class="chart-body">
+        <canvas id="chart14"></canvas>
+      </div>
     </div>
   </div>
 
   <!-- Chart 15: Day of Week -->
   <div class="chart-card wide">
     <div class="chart-header">
-      <h3 class="chart-title">15. Sentiment by Day of the Week</h3>
-      <div class="info-btn" tabindex="0">i
-        <div class="info-tooltip">
-          <strong>What this shows:</strong> Total post volume broken down by Monday through Sunday, split by sentiment color.<br/><br/>
-          <strong>Meaning:</strong> Discovers weekly behavioral trends. For instance, are users significantly more negative and combative on Mondays compared to weekends?
-        </div>
-      </div>
+      <h3 class="chart-title">15. Cultural Weekly Rhythm</h3>
     </div>
-    <div class="chart-body">
-      <canvas id="chart15"></canvas>
+    <div class="chart-content-wrapper">
+      <div class="analyst-box">
+        <strong>Analyst Insight:</strong> Discovers weekly behavioral trends. For instance, you can use this to determine if users are significantly more negative and combative on Mondays compared to the relaxing weekends.
+      </div>
+      <div class="chart-body">
+        <canvas id="chart15"></canvas>
+      </div>
     </div>
   </div>
 
 </div>
+{% endif %}
 
 <!-- Load Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

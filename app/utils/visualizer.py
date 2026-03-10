@@ -4,24 +4,51 @@ import os
 from datetime import datetime
 
 class ElectionDataVisualizer:
-    def __init__(self, csv_path):
-        self.csv_path = csv_path
+    def __init__(self, data_source):
         self.df = None
-        self._load_data()
+        if isinstance(data_source, str):
+            self.csv_path = data_source
+            self._load_csv()
+        elif isinstance(data_source, pd.DataFrame):
+            self.df = data_source
+            self._preprocess_data()
+        
+        if self.df is None or self.df.empty:
+            print("Warning: Visualizer initialized with empty data.")
 
-    def _load_data(self):
-        """Loads and preprocesses the CSV data."""
+    def _load_csv(self):
+        """Loads CSV data."""
         if os.path.exists(self.csv_path):
             self.df = pd.read_csv(self.csv_path)
-            # Parse timestamps
-            self.df['timestamp'] = pd.to_datetime(self.df['timestamp'], errors='coerce')
-            # Add derived columns
-            self.df['date'] = self.df['timestamp'].dt.date
-            self.df['hour'] = self.df['timestamp'].dt.hour
-            self.df['day_of_week'] = self.df['timestamp'].dt.day_name()
-            self.df['text_length'] = self.df['text'].fillna('').apply(len)
+            self._preprocess_data()
         else:
             print(f"File not found: {self.csv_path}")
+
+    def _preprocess_data(self):
+        """Preprocesses the DataFrame for visualization."""
+        if self.df is None or self.df.empty:
+            return
+            
+        # Map Supabase DB columns if they exist
+        if 'created_at' in self.df.columns and 'timestamp' not in self.df.columns:
+            self.df['timestamp'] = self.df['created_at']
+        if 'sentiment_label' in self.df.columns and 'sentiment' not in self.df.columns:
+            self.df['sentiment'] = self.df['sentiment_label']
+            
+        # Derive probability scores for legacy charts if confidence_score exists
+        if 'confidence_score' in self.df.columns:
+            self.df['score_positive'] = self.df.apply(lambda x: x['confidence_score'] if x.get('sentiment') == 'Positive' else 0, axis=1)
+            self.df['score_negative'] = self.df.apply(lambda x: x['confidence_score'] if x.get('sentiment') == 'Negative' else 0, axis=1)
+            self.df['score_neutral'] = self.df.apply(lambda x: x['confidence_score'] if x.get('sentiment') == 'Neutral' else 0, axis=1)
+
+        # Parse timestamps
+        self.df['timestamp'] = pd.to_datetime(self.df['timestamp'], errors='coerce')
+        
+        # Add derived columns
+        self.df['date'] = self.df['timestamp'].dt.date
+        self.df['hour'] = self.df['timestamp'].dt.hour
+        self.df['day_of_week'] = self.df['timestamp'].dt.day_name()
+        self.df['text_length'] = self.df.get('text', pd.Series(dtype=str)).fillna('').apply(len)
 
     def get_all_charts_data(self):
         """Returns a compiled dictionary of all 15 visualization datasets."""

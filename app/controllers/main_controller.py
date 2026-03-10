@@ -3,6 +3,7 @@
 from flask import Blueprint, render_template, session, flash, redirect, url_for, current_app, request, jsonify
 import os
 import json
+import pandas as pd
 from app.models.users import User
 from app.services.supabase_client import admin_supabase
 from app.utils.visualizer import ElectionDataVisualizer
@@ -46,36 +47,75 @@ def trends():
     user_data = session.get("user")
     user = User.from_dict(user_data) if user_data else None
     
-    # Default CSV
-    csv_filename = 'nepali_election.csv'
-    current_topic = 'nepali_election'
+    current_topic = None
+    charts_data = {}
+    top_positive = None
+    top_negative = None
+    
+    PREDEFINED_TOPICS = ["Donald Trump", "The Boys", "Avengers Doomsday", "Macbook Neo", "America vs Iran"]
     
     if request.method == "POST":
         topic_query = request.form.get("topic")
+        
         if topic_query:
-            from app.utils.fetcher import get_reddit_comments
-            # Fetch data using the query
-            get_reddit_comments(topic_query, limit_posts=100, subreddit_name="all", topic_name=topic_query)
-            csv_filename = f"{topic_query}.csv"
             current_topic = topic_query
+            
+            # Helper to fetch and extract data from Relational DB
+            def extract_and_visualize(t_id):
+                nonlocal charts_data, top_positive, top_negative
+                comment_res = admin_supabase.table("reddit_comments").select("*").eq("topic_id", t_id).execute()
+                if comment_res.data:
+                    df = pd.DataFrame(comment_res.data)
+                    
+                    # Extract top viral comments for the Reddit UI component
+                    if not df[df['sentiment_label'] == 'Positive'].empty:
+                        top_positive = df[df['sentiment_label'] == 'Positive'].nlargest(1, 'score').to_dict('records')[0]
+                    if not df[df['sentiment_label'] == 'Negative'].empty:
+                        top_negative = df[df['sentiment_label'] == 'Negative'].nlargest(1, 'score').to_dict('records')[0]
+                        
+                    try:
+                        vis = ElectionDataVisualizer(df)
+                        charts_data = vis.get_all_charts_data()
+                        return True
+                    except Exception as e:
+                        flash(f"Error visualizing data: {str(e)}")
+                return False
 
-    # Path to CSV
-    csv_path = os.path.join(current_app.root_path, 'static', 'analysed', csv_filename)
-    
-    if not os.path.exists(csv_path):
-        flash(f"No data found for topic: {current_topic}")
-        charts_data = {}
+            if current_topic in PREDEFINED_TOPICS:
+                # 1. PREDEFINED TOPIC: Pull dynamically from relational DB schema
+                topic_res = admin_supabase.table("search_topics").select("id").eq("name", current_topic).execute()
+                
+                if topic_res.data:
+                    topic_id = topic_res.data[0]['id']
+                    if not extract_and_visualize(topic_id):
+                         flash(f"No comments found for predefined topic: {current_topic}")
+                else:
+                    flash(f"No database records found for preset topic: {current_topic}. Please run the seeder script first!")
+                    
+            else:
+                # 2. CUSTOM TOPIC: Scrape Reddit (limit=250 posts deep) -> HF API -> Supabase DB -> Render
+                from app.utils.fetcher import get_reddit_comments
+                from app.utils.hf_analyzer import process_and_store_comments
+                
+                df = get_reddit_comments(topic_query, limit_posts=250, max_comments=2000, subreddit_name="all", topic_name=topic_query)
+                
+                if not df.empty:
+                    # Run Hugging Face Analysis and Store in DB (creates and links tables)
+                    process_and_store_comments(topic_query, df)
+                    
+                    # Immediately query DB to visualize the exact saved data
+                    topic_res = admin_supabase.table("search_topics").select("id").eq("name", current_topic).execute()
+                    if topic_res.data:
+                         topic_id = topic_res.data[0]['id']
+                         extract_and_visualize(topic_id)
+                else:
+                    flash(f"No comments found for custom topic: {current_topic}")
+
     else:
-        try:
-            # Initialize visualizer and get charts data
-            vis = ElectionDataVisualizer(csv_path)
-            charts_data = vis.get_all_charts_data()
-        except Exception as e:
-            flash(f"Error visualizing data: {str(e)}")
-            charts_data = {}
+        # GET request: Render completely empty to wait for user interaction
+        pass
     
-    # Pass data to template as JSON dump to easily use in JS
-    return render_template("trends.html", user=user, charts_data=json.dumps(charts_data), current_topic=current_topic)
+    return render_template("trends.html", user=user, charts_data=json.dumps(charts_data), current_topic=current_topic, top_positive=top_positive, top_negative=top_negative)
 
 
 # --- PROGRESS API ROUTE ---

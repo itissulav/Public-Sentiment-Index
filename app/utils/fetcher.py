@@ -21,7 +21,7 @@ fetch_progress = {
     "message": ""
 }
 
-def get_reddit_comments(query, limit_posts=100, subreddit_name="all", topic_name="topic"):
+def get_reddit_comments(query, limit_posts=250, max_comments=2000, subreddit_name="all", topic_name="topic"):
     global fetch_progress
     
     fetch_progress["status"] = "fetching"
@@ -46,13 +46,25 @@ def get_reddit_comments(query, limit_posts=100, subreddit_name="all", topic_name
         post_count += 1
         fetch_progress["current"] = post_count
         
-        # CRITICAL FIX: limit=0 stops PRAW from making 100s of recursive network requests per post
+        # Only fetch top-level comments to ensure diverse data and avoid
+        # massive nested arrays sharing the exact same post_id that causes DB rejection
         submission.comments.replace_more(limit=0)
 
-        for comment in submission.comments.list():
+        for comment in submission.comments:
+            if len(comment_data) >= max_comments:
+                break
+                
             cleaned = comment.body.replace('\n', ' ').strip()
 
             if not cleaned or cleaned.lower() in ["[deleted]", "[removed]"]:
+                continue
+                
+            # Date Filter Rule: Only accept comments 30 days old or newer
+            try:
+                comment_date = datetime.utcfromtimestamp(comment.created_utc)
+                if (datetime.utcnow() - comment_date).days > 30:
+                    continue
+            except:
                 continue
 
             timestamp = datetime.utcfromtimestamp(
@@ -63,9 +75,17 @@ def get_reddit_comments(query, limit_posts=100, subreddit_name="all", topic_name
                 "post_id": submission.id,
                 "post_title": submission.title,
                 "text": cleaned,
+                "author": comment.author.name if comment.author else "[deleted]",
                 "score": comment.score,
                 "timestamp": timestamp
             })
+            
+            if len(comment_data) % 100 == 0:
+                print(f"   ...scraped {len(comment_data)} comments so far...")
+
+        if len(comment_data) >= max_comments:
+            print(f"\nReached max comments limit ({max_comments}) for {query}. Stopping fetch early for speed.")
+            break
 
     fetch_progress["status"] = "analyzing"
     fetch_progress["message"] = "Analyzing and saving data..."
@@ -83,9 +103,8 @@ def get_reddit_comments(query, limit_posts=100, subreddit_name="all", topic_name
         df.to_csv(output_path, index=False)
         print(f"Saved results to {output_path}")
     else:
-        # Create an empty CSV just to ensure the file is created, or leave it. 
-        # Usually it's better to create an empty one with columns
-        df = pd.DataFrame(columns=["post_id", "post_title", "text", "score", "timestamp"])
+        # Create an empty CSV just to ensure the file is created with new columns
+        df = pd.DataFrame(columns=["post_id", "post_title", "text", "author", "score", "timestamp"])
         df.to_csv(output_path, index=False)
         print(f"No comments found. Saved empty template to {output_path}")
         
