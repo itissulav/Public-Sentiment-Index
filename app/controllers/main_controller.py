@@ -16,7 +16,17 @@ main_bp = Blueprint("main", __name__)
 def home():
     user_data = session.get("user")
     user = User.from_dict(user_data) if user_data else None
-    return render_template("home.html", user=user)
+    
+    # Fetch top topics data (ratings, sentiment) to show in Trending
+    trending_topics = []
+    try:
+        res = admin_supabase.table("search_topics").select("*").order("rating", desc=True).limit(5).execute()
+        if res.data:
+            trending_topics = res.data
+    except:
+        pass
+        
+    return render_template("home.html", user=user, trending_topics=trending_topics)
 
 @main_bp.route("/about")
 def about():
@@ -163,3 +173,42 @@ def api_delete_topic(topic_id):
     if success:
         return jsonify({"success": True}), 200
     return jsonify({"error": "Failed to delete topic"}), 500
+
+import threading
+
+def background_run_topic(topic_name):
+    from app.utils.fetcher import get_reddit_comments
+    from app.utils.hf_analyzer import process_and_store_comments
+    from app.utils.analyzer import calculate_topic_rating
+    
+    try:
+        print(f"Starting Background Analysis Thread for: {topic_name}")
+        df = get_reddit_comments(topic_name, limit_posts=250, max_comments=2000, subreddit_name="all", topic_name=topic_name)
+        if not df.empty:
+            process_and_store_comments(topic_name, df)
+            
+            # Find the generated topic_id to calculate the new numerical rating
+            res = admin_supabase.table("search_topics").select("id").eq("name", topic_name).execute()
+            if res.data:
+                calculate_topic_rating(res.data[0]['id'])
+        print(f"Background thread finished efficiently for: {topic_name}")
+    except Exception as e:
+        print(f"Background rerun failed for {topic_name}: {e}")
+
+@main_bp.route("/admin/api/topics/rerun", methods=["POST"])
+def api_rerun_topic():
+    user_data = session.get("user")
+    user = User.from_dict(user_data) if user_data else None
+    if not user or str(user.get_role()).lower() != "admin":
+        return jsonify({"error": "Unauthorized"}), 403
+        
+    topic_name = request.json.get("topicName")
+    if not topic_name:
+         return jsonify({"error": "No topic name provided"}), 400
+         
+    # Launch background thread to prevent API timeout
+    thread = threading.Thread(target=background_run_topic, args=(topic_name,))
+    thread.daemon = True # allow flask to close without locking this thread
+    thread.start()
+    
+    return jsonify({"success": True, "message": "Analysis started safely in background"}), 200

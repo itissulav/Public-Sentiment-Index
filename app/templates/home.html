@@ -41,60 +41,31 @@
     <div class="trends-preview-section">
       <div class="section-header-flex">
         <h2>Live Sentiment Trends</h2>
-        <a href="#" class="view-all-link">View All →</a>
+        <a href="{{ url_for('main.trends') }}" class="view-all-link">Analyze Full Data →</a>
       </div>
       <div class="trends-list">
-        <!-- Mock Trend Items -->
-        <div class="trend-item">
-          <div class="trend-rank">#1</div>
-          <div class="trend-info">
-            <h4>Global Economy 2026</h4>
-            <p>12.5k posts analyzed in the last 24h</p>
-          </div>
-          <div class="trend-score-area">
-            <div class="sentiment-bar-bg">
-              <div class="sentiment-bar-fill good" style="width: 78%;"></div>
+        {% if trending_topics %}
+          {% for topic in trending_topics %}
+            {% set img_name = topic.name|replace(' ', '')|lower + '.png' %}
+            {% set sentiment_class = 'good' if topic.sentiment == 'Positive' else ('bad' if topic.sentiment == 'Negative' else 'neutral') %}
+            {% set color_class = 'positive' if topic.sentiment == 'Positive' else ('negative' if topic.sentiment == 'Negative' else 'neutral') %}
+            <div class="trend-item" style="background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.85)), url({{ url_for('static', filename='images/' + img_name) }}); background-size: cover; background-position: center; border: 1px solid rgba(255,255,255,0.1);">
+              <div class="trend-rank">#{{ loop.index }}</div>
+              <div class="trend-info">
+                <h4 style="color: white; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">{{ topic.name }}</h4>
+                <p style="color: #aaa;">{{ "{:,}".format(topic.total_comments|default(0)) }} posts analyzed</p>
+              </div>
+              <div class="trend-score-area">
+                <div class="trend-sentiment {{ color_class }}" style="background: rgba(0,0,0,0.5); padding: 5px 12px; border-radius: 8px;">
+                  <span class="score" style="font-size: 1.2rem;">{{ topic.rating }}</span>
+                  <span class="label">{{ topic.sentiment }}</span>
+                </div>
+              </div>
             </div>
-            <div class="trend-sentiment positive">
-              <span class="score">78%</span>
-              <span class="label">Positive</span>
-            </div>
-          </div>
-        </div>
-        
-        <div class="trend-item">
-          <div class="trend-rank">#2</div>
-          <div class="trend-info">
-            <h4>Healthcare Reform Data</h4>
-            <p>8.2k posts analyzed in the last 24h</p>
-          </div>
-           <div class="trend-score-area">
-            <div class="sentiment-bar-bg">
-              <div class="sentiment-bar-fill neutral" style="width: 45%;"></div>
-            </div>
-            <div class="trend-sentiment neutral">
-              <span class="score">45%</span>
-              <span class="label">Neutral</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="trend-item">
-          <div class="trend-rank">#3</div>
-          <div class="trend-info">
-            <h4>Tech Regulation Hearing</h4>
-            <p>15.1k posts analyzed in the last 24h</p>
-          </div>
-           <div class="trend-score-area">
-            <div class="sentiment-bar-bg">
-              <div class="sentiment-bar-fill bad" style="width: 25%;"></div>
-            </div>
-            <div class="trend-sentiment negative">
-              <span class="score">25%</span>
-              <span class="label">Negative</span>
-            </div>
-          </div>
-        </div>
+          {% endfor %}
+        {% else %}
+          <p style="color: #888; font-style: italic;">No trending data available yet. Please run the backend analyzer.</p>
+        {% endif %}
       </div>
     </div>
 

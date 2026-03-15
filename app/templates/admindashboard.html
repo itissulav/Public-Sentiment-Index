@@ -30,7 +30,7 @@
       <div class="stat-icon">📊</div>
       <div class="stat-info">
         <h3>Total Topic</h3>
-        <span class="stat-number">{{ total_topic }}</span>
+        <span class="stat-number">{{ total_topics }}</span>
         <p class="stat-trend positive">↑ 12% this month</p>
       </div>
     </div>
@@ -131,7 +131,7 @@
             <tr>
               <td><span class="muted-id">#{{ top.get('id', '') }}</span></td>
               <td style="font-weight: 600;">{{ top.get('TopicName', 'Unnamed Topic') }}</td>
-              <td>{{ top.get('posts_analyzed', 'N/A') }}</td>
+              <td>{{ top.get('Post Analysed', top.get('posts_analyzed', 'N/A')) }}</td>
               <td>
                 <div class="sentiment-bar-bg">
                   {% set current_sentiment = top.get('sentiment') or 0 %}
@@ -141,9 +141,10 @@
               </td>
               <td><span class="role-badge {% if top.get('status', 'Active') == 'Active' %}admin{% else %}user{% endif %}">{{ top.get('status', 'Active') }}</span></td>
               <td>
-                <div class="btn-icon-group">
+                <div class="btn-icon-group" style="display: flex; gap: 5px; align-items: center;">
                   <button class="btn-icon edit" title="Edit Topic" onclick="editTopic('{{ top.get('id') }}')">✏️</button>
                   <button class="btn-icon delete" title="Delete Topic" onclick="deleteTopic('{{ top.get('id') }}')">🗑️</button>
+                  <button class="btn-outline primary-outline" style="font-size: 0.75rem; padding: 4px 8px; margin-left: 5px;" title="Rerun Sentiment Analysis" onclick="rerunSentiment('{{ top.get('TopicName', '') }}')">🔄 Rerun</button>
                 </div>
               </td>
             </tr>
@@ -392,6 +393,31 @@ async function deleteTopic(id) {
     } catch (err) {
       console.error(err);
       alert("Network error.");
+    }
+  }
+}
+
+async function rerunSentiment(topicName) {
+  if (!topicName) return;
+  if (confirm(`Are you sure you want to refresh sentiment data for "${topicName}"? This process scrapes Reddit and analyzes via AI in the background. It will take ~5 minutes to complete silently.`)) {
+    try {
+      const response = await fetch(`/admin/api/topics/rerun`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ topicName: topicName })
+      });
+
+      if (response.ok) {
+        alert("Sentiment analysis engine started successfully in the background! Check back later to see the updated scores.");
+      } else {
+        const errorData = await response.json();
+        alert("Error: " + (errorData.error || "Failed to start background analysis"));
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Network error. Please try again.");
     }
   }
 }
