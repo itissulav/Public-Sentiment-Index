@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Scan History - Public Sentiment Index{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/history.css') }}" />
+{% endblock %}
+
+{% block content %}
+<div class="history-container">
+
+  <!-- Page Header -->
+  <div class="history-header">
+    <div class="history-header-left">
+      <a href="{{ url_for('main.home') }}" class="back-link">← Back to Dashboard</a>
+      <h1>Your Saved Scans</h1>
+      <p>Every topic you have analysed is stored here. View the results or re-run a fresh analysis.</p>
+    </div>
+    <a href="{{ url_for('main.trends') }}" class="btn-new-scan">+ New Scan</a>
+  </div>
+
+  <!-- Scan Grid -->
+  {% if saved_scans %}
+  <div class="scan-grid">
+    {% for scan in saved_scans %}
+      {% set img_name = scan.name|replace(' ', '')|lower + '.png' %}
+      {% set sentiment_lc = (scan.sentiment or 'neutral')|lower %}
+      {% set r = (scan.rating or 0)|float %}
+
+      <div class="scan-card">
+
+        <!-- Card Banner -->
+        <div class="scan-card-banner" style="background-image: url('{{ url_for('static', filename='images/' + img_name) }}');">
+          <div class="scan-card-banner-overlay"></div>
+          <div class="scan-card-banner-content">
+            <span class="sentiment-pill {{ sentiment_lc }}">
+              {{ (scan.sentiment or 'Neutral')|upper }}
+            </span>
+            <h2 class="scan-topic-name">{{ scan.name }}</h2>
+          </div>
+        </div>
+
+        <!-- Card Body -->
+        <div class="scan-card-body">
+
+          <!-- Stats row -->
+          <div class="scan-stats">
+            <div class="scan-stat">
+              <span class="scan-stat-label">Comments</span>
+              <span class="scan-stat-value">{{ "{:,}".format(scan.total_comments|default(0)|int) }}</span>
+            </div>
+            <div class="scan-stat">
+              <span class="scan-stat-label">Rating</span>
+              <span class="scan-stat-value {{ sentiment_lc }}">
+                {% if r > 0 %}+{% endif %}{{ "%.1f"|format(r) }}
+              </span>
+            </div>
+            <div class="scan-stat">
+              <span class="scan-stat-label">Last Updated</span>
+              <span class="scan-stat-value date">
+                {% if scan.last_updated %}
+                  {{ scan.last_updated[:10] }}
+                {% else %}
+                  —
+                {% endif %}
+              </span>
+            </div>
+          </div>
+
+          <!-- Rating bar -->
+          {% set pct = ((r + 100) / 200 * 100) %}
+          <div class="scan-rating-track">
+            <div class="scan-rating-center"></div>
+            {% if r >= 0 %}
+            <div class="scan-rating-fill positive" style="left:50%; width:{{ ((pct - 50)|round(1)) }}%;"></div>
+            {% else %}
+            <div class="scan-rating-fill negative" style="left:{{ (pct|round(1)) }}%; width:{{ ((50 - pct)|round(1)) }}%;"></div>
+            {% endif %}
+          </div>
+          <div class="scan-rating-axis">
+            <span>-100</span><span>0</span><span>+100</span>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="scan-actions">
+            <form method="POST" action="{{ url_for('main.trends') }}" style="flex:1;">
+              <input type="hidden" name="topic"    value="{{ scan.name }}">
+              <input type="hidden" name="topic_id" value="{{ scan.id }}">
+              <button type="submit" class="btn-view">
+                View Analysis
+              </button>
+            </form>
+
+            <form method="POST" action="{{ url_for('main.trends') }}" style="flex:1;"
+                  onsubmit="this.querySelector('button').textContent='Queuing…'; this.querySelector('button').disabled=true;">
+              <input type="hidden" name="topic" value="{{ scan.name }}">
+              <button type="submit" class="btn-reanalyse">
+                Analyse Again
+              </button>
+            </form>
+          </div>
+
+        </div><!-- .scan-card-body -->
+      </div><!-- .scan-card -->
+    {% endfor %}
+  </div>
+
+  {% else %}
+  <!-- Empty state -->
+  <div class="history-empty">
+    <div class="empty-icon">🔍</div>
+    <h2>No saved scans yet</h2>
+    <p>Run your first custom topic analysis and it will appear here.</p>
+    <a href="{{ url_for('main.trends') }}" class="btn-new-scan">Start Analysing</a>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

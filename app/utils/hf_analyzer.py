@@ -1,6 +1,7 @@
 import os
 import time
 import requests
+from datetime import datetime, timezone
 from supabase import create_client, Client
 from dotenv import load_dotenv
 
@@ -47,23 +48,38 @@ def query_huggingface(texts):
             
     return None
 
-def process_and_store_comments(topic_name, df):
+def process_and_store_comments(topic_name, df, user_id=None):
     """
     Takes a DataFrame of comments, batches them to Hugging Face for sentiment,
     and inserts the complete records into the Supabase database.
+
+    user_id=None  → predefined/shared topic (user_id IS NULL in DB)
+    user_id=<uid> → user's personal saved search (private to that user)
     """
     from app.utils.fetcher import fetch_progress # Import shared progress state
-    
+
     if df.empty:
         return
-        
+
     print(f"hf_analyzer received DataFrame with {len(df)} rows for {topic_name}")
     fetch_progress["status"] = "analyzing"
-    
-    # RELATIONAL DB: Ensure topic exists and get ID
-    topic_res = supabase.table("search_topics").select("id").eq("name", topic_name).execute()
+
+    # RELATIONAL DB: Ensure topic exists and get ID, scoped by user_id
+    if user_id is None:
+        topic_res = supabase.table("search_topics").select("id") \
+                            .eq("name", topic_name) \
+                            .is_("user_id", "null") \
+                            .execute()
+    else:
+        topic_res = supabase.table("search_topics").select("id") \
+                            .eq("name", topic_name) \
+                            .eq("user_id", user_id) \
+                            .execute()
+
     if not topic_res.data:
-        insert_res = supabase.table("search_topics").insert({"name": topic_name}).execute()
+        insert_res = supabase.table("search_topics") \
+                             .insert({"name": topic_name, "user_id": user_id}) \
+                             .execute()
         topic_id = insert_res.data[0]['id']
     else:
         topic_id = topic_res.data[0]['id']
@@ -151,9 +167,12 @@ def process_and_store_comments(topic_name, df):
                 print(f"Supabase Insert Error: {e}")
                 
         print(f"Successfully saved {inserted_count} out of {len(db_records)} records.")
-        # Update UI count
+        # Update comment count and last_updated timestamp (needed for freshness checks)
         try:
-            supabase.table("search_topics").update({"total_comments": inserted_count}).eq("id", topic_id).execute()
+            supabase.table("search_topics").update({
+                "total_comments": inserted_count,
+                "last_updated": datetime.now(timezone.utc).isoformat()
+            }).eq("id", topic_id).execute()
         except:
             pass
                 

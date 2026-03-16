@@ -58,9 +58,19 @@
 }
 
 .card-icon {
-  font-size: 2.5rem;
-  margin-bottom: 15px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-dim);
+  border: 1px solid rgba(196, 146, 74, 0.2);
+  border-radius: 12px;
+  color: var(--accent);
+  margin-bottom: 18px;
 }
+
+.card-icon svg { width: 20px; height: 20px; }
 
 .glass-card h3 {
   font-size: 1.2rem;
@@ -184,6 +194,9 @@
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.05);
   transition: transform 0.2s, background 0.2s;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
 }
 
 .trend-item:hover {
@@ -513,10 +526,19 @@
 }
 
 .f-icon {
-  font-size: 3rem;
-  margin-bottom: 20px;
-  filter: drop-shadow(0 0 10px rgba(0,0,0,0.5));
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-dim);
+  border: 1px solid rgba(196, 146, 74, 0.18);
+  border-radius: 14px;
+  color: var(--accent);
+  margin: 0 auto 20px;
 }
+
+.f-icon svg { width: 24px; height: 24px; }
 
 .feature-card h3 {
   color: #fff;

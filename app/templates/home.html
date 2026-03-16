@@ -17,16 +17,16 @@
     <!-- User Quick Stats or Explore -->
     <div class="quick-stats-grid">
       <div class="glass-card trending-card">
-        <div class="card-icon">🔥</div>
+        <div class="card-icon"><i data-lucide="trending-up"></i></div>
         <h3>Trending Topics</h3>
         <p>Explore what everyone is talking about.</p>
-        <a href="#" class="btn-glow-small mt-3">Explore Trends</a>
+        <a href="{{ url_for('main.trends') }}" class="btn-glow-small mt-3">Explore Trends</a>
       </div>
       <div class="glass-card history-card">
-        <div class="card-icon">📊</div>
+        <div class="card-icon"><i data-lucide="clock-3"></i></div>
         <h3>Saved Scans</h3>
-        <p>You have 0 saved sentiment reports.</p>
-        <a href="#" class="btn-outline mt-3">View History</a>
+        <p>You have <strong>{{ saved_scan_count }}</strong> saved sentiment report{{ 's' if saved_scan_count != 1 else '' }}.</p>
+        <a href="{{ url_for('main.history') }}" class="btn-outline mt-3">View History</a>
       </div>
       <div class="glass-card profile-card">
         <div class="profile-avatar">{{ user.get_first_name()[0] }}{{ user.get_last_name()[0] }}</div>
@@ -47,21 +47,23 @@
         {% if trending_topics %}
           {% for topic in trending_topics %}
             {% set img_name = topic.name|replace(' ', '')|lower + '.png' %}
-            {% set sentiment_class = 'good' if topic.sentiment == 'Positive' else ('bad' if topic.sentiment == 'Negative' else 'neutral') %}
             {% set color_class = 'positive' if topic.sentiment == 'Positive' else ('negative' if topic.sentiment == 'Negative' else 'neutral') %}
-            <div class="trend-item" style="background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.85)), url({{ url_for('static', filename='images/' + img_name) }}); background-size: cover; background-position: center; border: 1px solid rgba(255,255,255,0.1);">
-              <div class="trend-rank">#{{ loop.index }}</div>
-              <div class="trend-info">
-                <h4 style="color: white; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">{{ topic.name }}</h4>
-                <p style="color: #aaa;">{{ "{:,}".format(topic.total_comments|default(0)) }} posts analyzed</p>
-              </div>
-              <div class="trend-score-area">
-                <div class="trend-sentiment {{ color_class }}" style="background: rgba(0,0,0,0.5); padding: 5px 12px; border-radius: 8px;">
-                  <span class="score" style="font-size: 1.2rem;">{{ topic.rating }}</span>
-                  <span class="label">{{ topic.sentiment }}</span>
+            <form method="POST" action="{{ url_for('main.trends') }}" style="margin:0; padding:0;">
+              <input type="hidden" name="topic" value="{{ topic.name }}">
+              <button type="submit" class="trend-item" style="width:100%; text-align:left; background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.85)), url({{ url_for('static', filename='images/' + img_name) }}); background-size: cover; background-position: center; border: 1px solid rgba(255,255,255,0.1); cursor:pointer;">
+                <div class="trend-rank">#{{ loop.index }}</div>
+                <div class="trend-info">
+                  <h4 style="color: white; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">{{ topic.name }}</h4>
+                  <p style="color: #aaa;">{{ "{:,}".format(topic.total_comments|default(0)) }} posts analyzed</p>
                 </div>
-              </div>
-            </div>
+                <div class="trend-score-area">
+                  <div class="trend-sentiment {{ color_class }}" style="background: rgba(0,0,0,0.5); padding: 5px 12px; border-radius: 8px;">
+                    <span class="score" style="font-size: 1.2rem;">{{ topic.rating }}</span>
+                    <span class="label">{{ topic.sentiment }}</span>
+                  </div>
+                </div>
+              </button>
+            </form>
           {% endfor %}
         {% else %}
           <p style="color: #888; font-style: italic;">No trending data available yet. Please run the backend analyzer.</p>
@@ -121,17 +123,17 @@
       </div>
       <div class="features-grid">
         <div class="feature-card">
-          <div class="f-icon">🧠</div>
+          <div class="f-icon"><i data-lucide="brain-circuit"></i></div>
           <h3>AI-Powered NLP</h3>
           <p>Utilizing state-of-the-art Natural Language Processing to accurately classify complex human emotions.</p>
         </div>
         <div class="feature-card">
-          <div class="f-icon">⚡</div>
+          <div class="f-icon"><i data-lucide="zap"></i></div>
           <h3>Real-Time Analytics</h3>
           <p>Live data streaming ensures you're always looking at the most current public sentiment.</p>
         </div>
         <div class="feature-card">
-          <div class="f-icon">🔒</div>
+          <div class="f-icon"><i data-lucide="shield-check"></i></div>
           <h3>Unbiased & Secure</h3>
           <p>Our algorithms are designed to reduce structural bias and provide an objective quantifiable score.</p>
         </div>

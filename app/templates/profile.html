@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}My Profile - Public Sentiment Index{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}" />
+{% endblock %}
+
+{% block content %}
+<div class="profile-page">
+
+  <!-- Flash messages -->
+  {% with messages = get_flashed_messages() %}
+  {% if messages %}
+  <div class="profile-flash">
+    {% for msg in messages %}
+    <div class="flash-msg {% if 'success' in msg.lower() %}flash-success{% else %}flash-error{% endif %}">
+      {{ msg }}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endwith %}
+
+  <div class="profile-layout">
+
+    <!-- ── LEFT: Identity card ───────────────────────────────── -->
+    <aside class="profile-sidebar">
+      <div class="profile-avatar-wrap">
+        <div class="profile-avatar {% if user.get_role() | lower == 'admin' %}avatar-admin{% endif %}">
+          {{ user.get_first_name()[0] | upper }}{{ user.get_last_name()[0] | upper }}
+        </div>
+        <span class="profile-role-badge {% if user.get_role() | lower == 'admin' %}badge-admin{% else %}badge-user{% endif %}">
+          {{ user.get_role() | capitalize }}
+        </span>
+      </div>
+
+      <h2 class="profile-name">{{ user.get_first_name() }} {{ user.get_last_name() }}</h2>
+      <p class="profile-handle">@{{ user.get_username() }}</p>
+
+      <div class="profile-meta-list">
+        <div class="profile-meta-item">
+          <span class="meta-label">Email</span>
+          <span class="meta-value meta-locked">{{ user.get_email() }}</span>
+        </div>
+        {% if scan_count is not none %}
+        <div class="profile-meta-item">
+          <span class="meta-label">Saved Scans</span>
+          <span class="meta-value">{{ scan_count }}</span>
+        </div>
+        {% endif %}
+      </div>
+
+      <p class="profile-locked-note">
+        Email and password can only be changed through account security settings.
+      </p>
+    </aside>
+
+    <!-- ── RIGHT: Edit form ──────────────────────────────────── -->
+    <main class="profile-main">
+      <div class="profile-card">
+        <div class="profile-card-header">
+          <h3 class="profile-card-title">Edit Profile</h3>
+          <p class="profile-card-sub">Update your display name and username. Email and password are not editable here.</p>
+        </div>
+
+        <form method="POST" action="{{ url_for('main.profile') }}" class="profile-form">
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="first_name">First Name</label>
+              <input
+                type="text"
+                id="first_name"
+                name="first_name"
+                class="form-input"
+                value="{{ user.get_first_name() }}"
+                required
+                maxlength="50"
+                placeholder="First name"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="last_name">Last Name</label>
+              <input
+                type="text"
+                id="last_name"
+                name="last_name"
+                class="form-input"
+                value="{{ user.get_last_name() }}"
+                required
+                maxlength="50"
+                placeholder="Last name"
+              />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="username">Username</label>
+            <div class="input-prefix-wrap">
+              <span class="input-prefix">@</span>
+              <input
+                type="text"
+                id="username"
+                name="username"
+                class="form-input prefixed"
+                value="{{ user.get_username() }}"
+                required
+                maxlength="30"
+                placeholder="your_handle"
+              />
+            </div>
+          </div>
+
+          <div class="form-group locked-field">
+            <label class="form-label">Email <i data-lucide="lock" style="width:12px;height:12px;opacity:0.5;"></i></label>
+            <input
+              type="email"
+              class="form-input"
+              value="{{ user.get_email() }}"
+              disabled
+            />
+          </div>
+
+          <div class="form-group locked-field">
+            <label class="form-label">Password <i data-lucide="lock" style="width:12px;height:12px;opacity:0.5;"></i></label>
+            <input
+              type="password"
+              class="form-input"
+              value="••••••••••••"
+              disabled
+            />
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn-save">Save Changes</button>
+          </div>
+
+        </form>
+      </div>
+    </main>
+
+  </div>
+</div>
+{% endblock %}

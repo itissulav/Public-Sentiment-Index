@@ -18,37 +18,37 @@
   <div class="stats-grid">
     <!-- Quick Analytics Cards -->
     <div class="stat-card">
-      <div class="stat-icon">👥</div>
+      <div class="stat-icon"><i data-lucide="users"></i></div>
       <div class="stat-info">
         <h3>Total Users</h3>
         <span class="stat-number">{{ total_users }}</span>
-        <p class="stat-trend positive">↑ 12% this month</p>
+        <p class="stat-trend positive">Registered accounts</p>
       </div>
     </div>
 
     <div class="stat-card">
-      <div class="stat-icon">📊</div>
+      <div class="stat-icon"><i data-lucide="bar-chart-2"></i></div>
       <div class="stat-info">
-        <h3>Total Topic</h3>
+        <h3>Tracked Topics</h3>
         <span class="stat-number">{{ total_topics }}</span>
-        <p class="stat-trend positive">↑ 12% this month</p>
+        <p class="stat-trend positive">Predefined topics</p>
       </div>
     </div>
-    
+
     <div class="stat-card">
-      <div class="stat-icon">📈</div>
+      <div class="stat-icon"><i data-lucide="scan-search"></i></div>
       <div class="stat-info">
-        <h3>Sentiment Scans</h3>
-        <span class="stat-number">1,204</span>
-        <p class="stat-trend positive">↑ Active now</p>
+        <h3>Active Analysis</h3>
+        <span class="stat-number">Live</span>
+        <p class="stat-trend positive">Running now</p>
       </div>
     </div>
-    
+
     <div class="stat-card">
-      <div class="stat-icon">⚠️</div>
+      <div class="stat-icon"><i data-lucide="circle-check"></i></div>
       <div class="stat-info">
-        <h3>System Alerts</h3>
-        <span class="stat-number">0</span>
+        <h3>System Status</h3>
+        <span class="stat-number">OK</span>
         <p class="stat-trend neutral">All systems nominal</p>
       </div>
     </div>
@@ -58,8 +58,12 @@
     
     <!-- Tab Controls -->
     <div class="tab-controls">
-      <button class="tab-btn active" onclick="openTab(event, 'tab-users')">👥 User Directory</button>
-      <button class="tab-btn" onclick="openTab(event, 'tab-topics')">📊 Tracked Topics</button>
+      <button class="tab-btn active" onclick="openTab(event, 'tab-users')">
+        <i data-lucide="users" style="width:15px;height:15px;vertical-align:middle;margin-right:6px;"></i>User Directory
+      </button>
+      <button class="tab-btn" onclick="openTab(event, 'tab-topics')">
+        <i data-lucide="bar-chart-2" style="width:15px;height:15px;vertical-align:middle;margin-right:6px;"></i>Tracked Topics
+      </button>
     </div>
 
     <!-- TAB 1: USERS -->
@@ -111,44 +115,79 @@
     <!-- TAB 2: TOPICS -->
     <div id="tab-topics" class="panel tab-content" style="display: none;">
       <div class="panel-header">
-        <h2>Active Sentiment Topics</h2>
-        <button class="btn-outline primary-outline" onclick="openTopicModal()">+ Add New Topic</button>
+        <h2>Predefined Sentiment Topics</h2>
+        <span style="color: var(--text-muted); font-size: 0.82rem;">{{ total_topics }} topic{{ 's' if total_topics != 1 }} · shared with all users</span>
       </div>
       <div class="table-responsive">
         <table class="modern-table">
           <thead>
             <tr>
-              <th>ID</th>
               <th>Topic Name</th>
-              <th>Posts Analyzed</th>
-              <th>PSI Score (0-100)</th>
-              <th>Tracking Status</th>
+              <th>Comments Analysed</th>
+              <th>PSI Rating</th>
+              <th>Sentiment</th>
+              <th>Last Updated</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {% for top in topics %}
+            {% for top in predefined_topics %}
+            {% set rating = top.get('rating') or 0 %}
+            {% set sentiment = top.get('sentiment') or 'Neutral' %}
+            {% set bar_pct = ((rating + 100) / 200 * 100) | round(1) %}
             <tr>
-              <td><span class="muted-id">#{{ top.get('id', '') }}</span></td>
-              <td style="font-weight: 600;">{{ top.get('TopicName', 'Unnamed Topic') }}</td>
-              <td>{{ top.get('Post Analysed', top.get('posts_analyzed', 'N/A')) }}</td>
+              <td style="font-weight: 600; color: var(--text-main);">{{ top.get('name', 'Unnamed') }}</td>
+              <td>{{ top.get('total_comments') or '—' }}</td>
               <td>
-                <div class="sentiment-bar-bg">
-                  {% set current_sentiment = top.get('sentiment') or 0 %}
-                  <div class="sentiment-bar-fill {% if current_sentiment > 65 %}good{% elif current_sentiment > 45 %}neutral{% else %}bad{% endif %}" style="width: {{ current_sentiment }}%;"></div>
+                <div class="sentiment-bar-bg" style="margin-bottom: 4px;">
+                  <div class="sentiment-bar-fill {% if rating > 20 %}good{% elif rating > -20 %}neutral{% else %}bad{% endif %}"
+                       style="width: {{ bar_pct }}%; margin-left: 0;"></div>
                 </div>
-                <span class="sentiment-score-text">{{ "positive" if current_sentiment > 0 else "negative" if current_sentiment < 0 else "neutral" }}</span>
+                <span class="sentiment-score-text" style="font-size:0.75rem;">
+                  {{ '+' if rating > 0 else '' }}{{ rating | round(1) }}
+                </span>
               </td>
-              <td><span class="role-badge {% if top.get('status', 'Active') == 'Active' %}admin{% else %}user{% endif %}">{{ top.get('status', 'Active') }}</span></td>
               <td>
-                <div class="btn-icon-group" style="display: flex; gap: 5px; align-items: center;">
-                  <button class="btn-icon edit" title="Edit Topic" onclick="editTopic('{{ top.get('id') }}')">✏️</button>
-                  <button class="btn-icon delete" title="Delete Topic" onclick="deleteTopic('{{ top.get('id') }}')">🗑️</button>
-                  <button class="btn-outline primary-outline" style="font-size: 0.75rem; padding: 4px 8px; margin-left: 5px;" title="Rerun Sentiment Analysis" onclick="rerunSentiment('{{ top.get('TopicName', '') }}')">🔄 Rerun</button>
+                <span class="role-badge {% if sentiment == 'Positive' %}admin{% elif sentiment == 'Negative' %}delete-badge{% else %}user{% endif %}">
+                  {{ sentiment }}
+                </span>
+              </td>
+              <td style="color: var(--text-muted); font-size: 0.82rem;">
+                {% if top.get('last_updated') %}
+                  {{ top.get('last_updated')[:10] }}
+                {% else %}
+                  Never
+                {% endif %}
+              </td>
+              <td>
+                <div class="topic-actions">
+                  <button
+                    class="btn-analyse"
+                    onclick="rerunSentiment('{{ top.get('name', '') }}')"
+                    data-topic="{{ top.get('name', '') }}"
+                    title="Re-scrape Reddit and reanalyse sentiment"
+                  >
+                    <span class="analyse-icon">⟳</span> Analyse
+                  </button>
+                  <button
+                    class="btn-topic-delete"
+                    onclick="deletePredefinedTopic('{{ top.get('id', '') }}', '{{ top.get('name', '') }}')"
+                    data-id="{{ top.get('id', '') }}"
+                    title="Delete topic and all its data"
+                  >
+                    🗑
+                  </button>
                 </div>
               </td>
             </tr>
             {% endfor %}
+            {% if not predefined_topics %}
+            <tr>
+              <td colspan="6" class="text-center" style="padding: 40px; color: var(--text-muted);">
+                No predefined topics found. Run <code>seed_topics.py</code> to populate them.
+              </td>
+            </tr>
+            {% endif %}
           </tbody>
         </table>
       </div>
@@ -203,7 +242,6 @@
 </div>
 
 <script>
-const topicsData = {{ topics | tojson | safe }};
 
 function openTab(evt, tabName) {
   var i, tabcontent, tablinks;
@@ -397,28 +435,72 @@ async function deleteTopic(id) {
   }
 }
 
+async function deletePredefinedTopic(topicId, topicName) {
+  if (!topicId) return;
+  if (!confirm(`Delete "${topicName}"?\n\nThis will permanently remove the topic and ALL its Reddit comments from the database. This cannot be undone.`)) return;
+
+  const btn = document.querySelector(`.btn-topic-delete[data-id="${topicId}"]`);
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+
+  try {
+    const response = await fetch(`/admin/api/predefined-topics/${topicId}`, {
+      method: 'DELETE'
+    });
+
+    if (response.ok) {
+      // Remove the row from the table without a full page reload
+      const row = btn.closest('tr');
+      if (row) {
+        row.style.transition = 'opacity 0.3s ease';
+        row.style.opacity = '0';
+        setTimeout(() => row.remove(), 300);
+      }
+    } else {
+      const err = await response.json();
+      alert('Error: ' + (err.error || 'Failed to delete topic'));
+      if (btn) { btn.disabled = false; btn.textContent = '🗑'; }
+    }
+  } catch (e) {
+    console.error(e);
+    alert('Network error. Please try again.');
+    if (btn) { btn.disabled = false; btn.textContent = '🗑'; }
+  }
+}
+
 async function rerunSentiment(topicName) {
   if (!topicName) return;
-  if (confirm(`Are you sure you want to refresh sentiment data for "${topicName}"? This process scrapes Reddit and analyzes via AI in the background. It will take ~5 minutes to complete silently.`)) {
-    try {
-      const response = await fetch(`/admin/api/topics/rerun`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ topicName: topicName })
-      });
+  if (!confirm(`Re-analyse "${topicName}"?\n\nThis will scrape Reddit and run AI sentiment analysis in the background (~5 mins). The page will show updated scores after it finishes.`)) return;
 
-      if (response.ok) {
-        alert("Sentiment analysis engine started successfully in the background! Check back later to see the updated scores.");
-      } else {
-        const errorData = await response.json();
-        alert("Error: " + (errorData.error || "Failed to start background analysis"));
+  // Find the button and show loading state
+  const btn = document.querySelector(`.btn-analyse[data-topic="${topicName}"]`);
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="analyse-spinner"></span> Running…';
+  }
+
+  try {
+    const response = await fetch('/admin/api/topics/rerun', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topicName })
+    });
+
+    if (response.ok) {
+      if (btn) {
+        btn.innerHTML = '✓ Started';
+        btn.style.background = 'rgba(16,185,129,0.15)';
+        btn.style.borderColor = 'rgba(16,185,129,0.5)';
+        btn.style.color = '#10b981';
       }
-    } catch (err) {
-      console.error(err);
-      alert("Network error. Please try again.");
+    } else {
+      const err = await response.json();
+      alert('Error: ' + (err.error || 'Failed to start analysis'));
+      if (btn) { btn.disabled = false; btn.innerHTML = '<span class="analyse-icon">⟳</span> Analyse'; }
     }
+  } catch (e) {
+    console.error(e);
+    alert('Network error. Please try again.');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<span class="analyse-icon">⟳</span> Analyse'; }
   }
 }
 </script>

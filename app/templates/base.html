@@ -3,66 +3,137 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{% block title %}{% endblock %} | PSI</title>
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <link
-      rel="stylesheet"
-      href="{{ url_for('static', filename='css/base.css') }}"
-    />
+    <title>{% block title %}{% endblock %} — PSI</title>
+
+    <!-- Fonts: Syne (headings) + DM Sans (body) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet" />
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}" />
     {% block extra_css %}{% endblock %}
   </head>
   <body>
-    <nav class="navbar">
-      <div class="nav-container">
-        <a href="{{ url_for('main.home') }}" class="nav-logo">
-          <span class="logo-text">Public Sentiment <span>Index</span></span>
+
+    <!-- ── Mobile toggle ──────────────────────────────── -->
+    <button class="sidebar-mobile-btn" id="sidebarMobileBtn" aria-label="Open menu">
+      <i data-lucide="menu"></i>
+    </button>
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+    <!-- ── Sidebar ────────────────────────────────────── -->
+    <aside class="sidebar" id="sidebar">
+
+      <!-- Brand -->
+      <a href="{{ url_for('main.home') }}" class="sidebar-brand">
+        <div class="brand-mark">
+          <i data-lucide="activity"></i>
+        </div>
+        <span class="brand-name">PSI</span>
+      </a>
+
+      <!-- Primary nav -->
+      <nav class="sidebar-nav">
+
+        <a href="{{ url_for('main.home') }}"
+           class="sidebar-item {% if request.endpoint == 'main.home' %}active{% endif %}">
+          <span class="item-icon"><i data-lucide="house"></i></span>
+          <span class="item-label">Home</span>
         </a>
 
-        <input type="checkbox" id="nav-toggle" class="nav-toggle" />
-        <label for="nav-toggle" class="nav-toggle-label">
-          <span></span>
-        </label>
+        <a href="{{ url_for('main.about') }}"
+           class="sidebar-item {% if request.endpoint == 'main.about' %}active{% endif %}">
+          <span class="item-icon"><i data-lucide="info"></i></span>
+          <span class="item-label">About</span>
+        </a>
 
-        <ul class="nav-menu">
-          <li>
-            <a href="{{ url_for('main.home') }}" class="nav-link">Home</a>
-          </li>
-          <li>
-            <a href="{{ url_for('main.about') }}" class="nav-link">About</a>
-          </li>
-          
-          {% if user and user.get_role() | lower == 'admin' %}
-          <li><a href="{{ url_for('main.admindashboard') }}" class="nav-link" style="color: var(--primary);">Admin Dashboard</a></li>
-          {% else %}
-          <li><a href="{{ url_for('main.trends') }}" class="nav-link">Trends</a></li>
-          {% endif %}
+        {% if user and user.get_role() | lower == 'admin' %}
+        <a href="{{ url_for('main.admindashboard') }}"
+           class="sidebar-item {% if request.endpoint == 'main.admindashboard' %}active{% endif %}">
+          <span class="item-icon"><i data-lucide="layout-dashboard"></i></span>
+          <span class="item-label">Dashboard</span>
+        </a>
 
-          {% if user %}
-          <li>
-            <a href="{{ url_for('auth.logout') }}" class="nav-link">Logout</a>
-          </li>
-          <li class="nav-item-user">
-            <a href="#" class="nav-btn-profile">
-              {{ user.get_first_name()[0] }}{{ user.get_last_name()[0] }}
-            </a>
-          </li>
-          {% else %}
-          <li>
-            <a href="{{ url_for('auth.login') }}" class="nav-link">Login</a>
-          </li>
-          <li>
-            <a href="{{ url_for('auth.register') }}" class="nav-btn"
-              >Get Started</a
-            >
-          </li>
-          {% endif %}
-        </ul>
+        {% else %}
+        <a href="{{ url_for('main.trends') }}"
+           class="sidebar-item {% if request.endpoint == 'main.trends' %}active{% endif %}">
+          <span class="item-icon"><i data-lucide="bar-chart-2"></i></span>
+          <span class="item-label">Trends</span>
+        </a>
+
+        {% if user %}
+        <a href="{{ url_for('main.compare') }}"
+           class="sidebar-item {% if request.endpoint == 'main.compare' %}active{% endif %}">
+          <span class="item-icon"><i data-lucide="columns-2"></i></span>
+          <span class="item-label">Compare</span>
+        </a>
+
+        <a href="{{ url_for('main.history') }}"
+           class="sidebar-item {% if request.endpoint == 'main.history' %}active{% endif %}">
+          <span class="item-icon"><i data-lucide="clock-3"></i></span>
+          <span class="item-label">History</span>
+        </a>
+        {% endif %}
+        {% endif %}
+
+      </nav>
+
+      <!-- Footer -->
+      <div class="sidebar-footer">
+
+        {% if user %}
+        <a href="{{ url_for('main.profile') }}"
+           class="sidebar-item sidebar-profile {% if request.endpoint == 'main.profile' %}active{% endif %}">
+          <span class="item-icon">
+            <div class="sidebar-avatar {% if user.get_role() | lower == 'admin' %}avatar-admin{% endif %}">
+              {{ user.get_first_name()[0] | upper }}{{ user.get_last_name()[0] | upper }}
+            </div>
+          </span>
+          <div class="sidebar-user-meta">
+            <span class="sidebar-user-name">{{ user.get_first_name() }} {{ user.get_last_name() }}</span>
+            <span class="sidebar-user-role">{{ user.get_role() }}</span>
+          </div>
+        </a>
+
+        <a href="{{ url_for('auth.logout') }}" class="sidebar-item sidebar-logout">
+          <span class="item-icon"><i data-lucide="log-out"></i></span>
+          <span class="item-label">Logout</span>
+        </a>
+
+        {% else %}
+        <a href="{{ url_for('auth.login') }}" class="sidebar-item">
+          <span class="item-icon"><i data-lucide="log-in"></i></span>
+          <span class="item-label">Login</span>
+        </a>
+
+        <a href="{{ url_for('auth.register') }}" class="sidebar-item sidebar-cta">
+          <span class="item-icon"><i data-lucide="user-round-plus"></i></span>
+          <span class="item-label">Get Started</span>
+        </a>
+        {% endif %}
+
       </div>
-    </nav>
+    </aside>
 
+    <!-- ── Page content ───────────────────────────────── -->
     <main class="content-wrapper">{% block content %}{% endblock %}</main>
+
+    <!-- Lucide icons runtime -->
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+    <script>
+      lucide.createIcons();
+
+      // Mobile sidebar toggle
+      const btn      = document.getElementById('sidebarMobileBtn');
+      const backdrop = document.getElementById('sidebarBackdrop');
+      const sidebar  = document.getElementById('sidebar');
+      function toggleSidebar() {
+        sidebar.classList.toggle('open');
+        backdrop.classList.toggle('visible');
+      }
+      if (btn)      btn.addEventListener('click', toggleSidebar);
+      if (backdrop) backdrop.addEventListener('click', toggleSidebar);
+    </script>
+
   </body>
 </html>

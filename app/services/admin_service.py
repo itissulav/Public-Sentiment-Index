@@ -26,6 +26,19 @@ def get_all_topics():
         print("Error fetching topics:", e)
         return 0, []
 
+def get_predefined_topics():
+    """Fetch all predefined (shared) topics from search_topics where user_id IS NULL."""
+    try:
+        response = admin_supabase.table("search_topics") \
+                                 .select("id, name, rating, sentiment, total_comments, last_updated") \
+                                 .is_("user_id", "null") \
+                                 .order("name") \
+                                 .execute()
+        return len(response.data), response.data
+    except Exception as e:
+        print("Error fetching predefined topics:", e)
+        return 0, []
+
 def add_topic(topic_data):
     try:
         # Fetch current max ID to implement auto-increment

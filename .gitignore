@@ -5,8 +5,8 @@ __pycache__/
 .idea/
 .vscode/
 
-# Ignore fetched CSV files if you don't want them tracked
-static/analysed/*.csv
+# Analysed CSV output (moved to _dev/analysed)
+app/static/analysed/
 
 # Dev-only files: tests, debug logs, planning docs, seed scripts
 _dev/

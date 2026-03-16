@@ -94,7 +94,7 @@ def get_reddit_comments(query, limit_posts=250, max_comments=2000, subreddit_nam
     df = pd.DataFrame(comment_data)
     
     # Ensure directory exists and construct target path
-    output_dir = os.path.join("static", "analysed")
+    output_dir = os.path.join("_dev", "analysed")
     os.makedirs(output_dir, exist_ok=True)
     
     output_path = os.path.join(output_dir, f"{topic_name}.csv")

@@ -53,20 +53,23 @@
 .stat-card:hover {
   transform: translateY(-5px);
   box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
-  border-color: rgba(0, 242, 254, 0.3);
+  border-color: var(--accent-glow);
 }
 
 .stat-icon {
-  font-size: 3rem;
-  background: rgba(255, 255, 255, 0.05);
-  height: 80px;
-  width: 80px;
+  background: var(--accent-dim);
+  height: 56px;
+  width: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  border: 1px solid rgba(196, 146, 74, 0.2);
+  color: var(--accent);
+  flex-shrink: 0;
 }
+
+.stat-icon svg { width: 22px; height: 22px; }
 
 .stat-info h3 {
   font-size: 0.95rem;
@@ -190,10 +193,10 @@
 }
 
 .primary-outline:hover {
-  background: rgba(0, 242, 254, 0.1);
+  background: var(--accent-dim);
   color: var(--primary);
   border-color: var(--primary);
-  box-shadow: 0 0 10px rgba(0, 242, 254, 0.3);
+  box-shadow: 0 0 10px var(--accent-glow);
 }
 
 .table-responsive {
@@ -211,7 +214,7 @@
 }
 
 .table-responsive::-webkit-scrollbar-thumb {
-  background: rgba(0, 242, 254, 0.3);
+  background: var(--accent-glow);
   border-radius: 4px;
 }
 
@@ -276,9 +279,9 @@
 }
 
 .role-badge.user, .role-badge.review {
-  background: rgba(0, 242, 254, 0.1);
+  background: var(--accent-dim);
   color: var(--primary);
-  border: 1px solid rgba(0, 242, 254, 0.3);
+  border: 1px solid var(--accent-glow);
 }
 
 .status-indicator {
@@ -458,7 +461,7 @@
 .form-input:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(0, 242, 254, 0.2);
+  box-shadow: 0 0 0 2px var(--accent-dim);
 }
 
 .dynamic-list {
@@ -477,7 +480,7 @@
 }
 
 .btn-add-item {
-  background: rgba(0, 242, 254, 0.1);
+  background: var(--accent-dim);
   border: 1px solid var(--primary);
   color: var(--primary);
   width: 45px;
@@ -554,4 +557,96 @@
 
 .btn-cancel:hover {
   background: rgba(255, 255, 255, 0.1);
+}
+
+/* ── Analyse button (topics tab) ───────────────────────── */
+.btn-analyse {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border-radius: 10px;
+  background: rgba(0, 242, 254, 0.07);
+  border: 1px solid var(--accent-glow);
+  color: var(--primary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-analyse:hover:not(:disabled) {
+  background: rgba(0, 242, 254, 0.15);
+  border-color: rgba(0, 242, 254, 0.6);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px var(--accent-dim);
+}
+
+.btn-analyse:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.analyse-icon {
+  font-size: 1rem;
+  line-height: 1;
+  display: inline-block;
+}
+
+.analyse-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--accent-dim);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: cspin 0.8s linear infinite;
+  vertical-align: middle;
+}
+
+@keyframes cspin { to { transform: rotate(360deg); } }
+
+/* ── Topic actions group ───────────────────────────────────── */
+.topic-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-topic-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.07);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #f87171;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.btn-topic-delete:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.55);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+}
+
+.btn-topic-delete:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Negative sentiment badge */
+.role-badge.delete-badge {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
 }
