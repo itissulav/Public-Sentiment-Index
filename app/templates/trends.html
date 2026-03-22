@@ -95,58 +95,66 @@
 {% endmacro %}
 
 {% block content %}
+<script type="application/json" id="psi-trends-suggestions">{{ suggestions | tojson }}</script>
 
 <!-- ============================================================
-     PAGE HEADER: Search Bar + Featured Topic Cards
+     TRENDS LANDING: split-screen search + featured topics
      ============================================================ -->
-<div class="trends-header">
-  <h1>Sentiment Trends Analysis</h1>
-  <p>Explore public discourse, temporal sentiment shifts, and engagement patterns sourced directly from Reddit.</p>
+<div class="trends-landing">
 
-  <div class="search-container">
-    <form method="POST" action="{{ url_for('main.trends') }}" class="topic-search-form" id="searchForm">
-      <input type="text" name="topic" placeholder="Search any topic (e.g. Bitcoin, Taylor Swift, Gaza…)" required class="search-input"
-             value="{{ current_topic if current_topic else '' }}">
-<button type="submit" class="search-btn" id="analyzeBtn">Analyze</button>
-      <a href="{{ url_for('main.compare') }}" class="compare-link-btn">Compare Topics</a>
-    </form>
-    <!-- Full-screen analysis loading overlay (replaces inline progress bar) -->
-    <div id="loadingIndicator" style="display:none;position:fixed;inset:0;background:rgba(6,6,7,0.94);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:22px;">
-      <p id="progressText" style="color:#f5f0e8;font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:600;letter-spacing:0.03em;margin:0;text-align:center;max-width:340px;line-height:1.5;">Initializing analysis…</p>
-      <div style="width:320px;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;">
-        <div id="progressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#FF4B1F,#FFB347);border-radius:2px;transition:width 0.4s ease;"></div>
+  <!-- Left: editorial copy + search -->
+  <div class="landing-left">
+    <span class="landing-eyebrow">Public Sentiment Index</span>
+    <h1 class="landing-headline">What is the world<br>saying about <em>anything</em>?</h1>
+    <p class="landing-sub">Search any topic to instantly analyze thousands of Reddit and YouTube comments with AI-powered sentiment analysis.</p>
+
+    <div class="search-container">
+      <div class="trends-search-wrap">
+        <form method="POST" action="{{ url_for('main.trends') }}" class="topic-search-form" id="searchForm">
+          <input type="text" name="topic" id="trendsSearchInput" placeholder="Bitcoin, Taylor Swift, Gaza…" required class="search-input"
+                 autocomplete="off" value="{{ current_topic if current_topic else '' }}">
+          <button type="submit" class="search-btn" id="analyzeBtn">Analyze</button>
+        </form>
+        <div class="trends-search-dropdown" id="trendsSearchDropdown"></div>
       </div>
-      <p id="progressPercent" style="color:#5a5565;font-size:0.82rem;margin:0;">0%</p>
+      <a href="{{ url_for('main.compare') }}" class="compare-link-btn">Compare Topics &rarr;</a>
+      <!-- Full-screen analysis loading overlay -->
+      <div id="loadingIndicator" style="display:none;position:fixed;inset:0;background:rgba(6,6,7,0.94);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:22px;">
+        <p id="progressText" style="color:#f5f0e8;font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:600;letter-spacing:0.03em;margin:0;text-align:center;max-width:340px;line-height:1.5;">Initializing analysis…</p>
+        <div style="width:320px;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;">
+          <div id="progressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#FF4B1F,#FFB347);border-radius:2px;transition:width 0.4s ease;"></div>
+        </div>
+        <p id="progressPercent" style="color:#5a5565;font-size:0.82rem;margin:0;">0%</p>
+      </div>
     </div>
   </div>
 
-  <!-- Featured Topic Cards -->
-  <div class="featured-section">
-    <h2 class="featured-title">Explore Featured Topics</h2>
-    <p class="featured-sub">Pre-analyzed with thousands of data points — click to instantly view the full report.</p>
-    <div class="hero-grid">
-      {% set presets = [
-        ("Donald Trump",      "donaldtrump.png"),
-        ("The Boys",          "theboys.png"),
-        ("Avengers Doomsday", "avengersdoomsday.png"),
-        ("Macbook Neo",       "macbookneo.png"),
-        ("America vs Iran",   "americavsiran.png")
-      ] %}
+  <!-- Right: featured topics editorial list -->
+  <div class="landing-right">
+    <p class="landing-right-label">Featured Topics</p>
+    {% set presets = [
+      ("Donald Trump",      "donaldtrump.png"),
+      ("The Boys",          "theboys.png"),
+      ("Avengers Doomsday", "avengersdoomsday.png"),
+      ("Macbook Neo",       "macbookneo.png"),
+      ("America vs Iran",   "americavsiran.png")
+    ] %}
+    <div class="hero-list">
       {% for pt, img in presets %}
-      <form method="POST" action="{{ url_for('main.trends') }}" style="margin:0; padding:0;">
+      <form method="POST" action="{{ url_for('main.trends') }}" class="hero-list-form">
         <input type="hidden" name="topic" value="{{ pt }}">
-        <button type="submit" class="hero-card {{ 'active' if current_topic == pt else '' }}"
-                onclick="document.body.style.cursor='wait';">
-          <div class="hero-bg" style="background-image: url('{{ url_for('static', filename='images/' ~ img) }}');"></div>
-          <div class="hero-overlay">
-            <h3 class="hero-title">{{ pt }}</h3>
-            <span class="hero-badge">Instant Report &rarr;</span>
+        <button type="submit" class="hero-list-item {{ 'active' if current_topic == pt else '' }}"
+                style="background-image: url('{{ url_for('static', filename='images/' ~ img) }}');">
+          <div class="hero-card-content">
+            <span class="hero-list-name">{{ pt }}</span>
+            <span class="hero-list-meta">Instant Report &rarr;</span>
           </div>
         </button>
       </form>
       {% endfor %}
     </div>
   </div>
+
 </div>
 
 
@@ -217,14 +225,14 @@
      ============================================================ -->
 <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:80px 20px; text-align:center;">
   <div style="font-size:3rem; margin-bottom:20px;">📭</div>
-  <h2 style="color:#f8fafc; font-size:1.5rem; margin-bottom:10px;">No analysis data found for <span style="color:#4facfe">{{ current_topic }}</span></h2>
+  <h2 style="color:#f8fafc; font-size:1.5rem; margin-bottom:10px;">No analysis data found for <span style="color:var(--accent)">{{ current_topic }}</span></h2>
   <p style="color:#94a3b8; max-width:460px; margin-bottom:28px;">
     This scan exists but has no comment data — the background analysis may have failed or is still running.
     Re-submit the topic to start a fresh analysis.
   </p>
   <form method="POST" action="{{ url_for('main.trends') }}" style="margin:0;">
     <input type="hidden" name="topic" value="{{ current_topic }}">
-    <button type="submit" style="padding:12px 28px; background:linear-gradient(90deg,#4facfe,#a855f7); color:#fff; border:none; border-radius:8px; font-size:0.95rem; font-weight:600; cursor:pointer;">
+    <button type="submit" style="padding:12px 28px; background:var(--accent); color:#fff; border:none; border-radius:4px; font-size:0.85rem; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; cursor:pointer;">
       Re-run Analysis
     </button>
   </form>
@@ -233,23 +241,14 @@
 {% else %}
 
 <!-- ============================================================
-     ANALYSIS HERO BANNER
+     ANALYSIS HEADER
      ============================================================ -->
-{% set topic_images = {
-  "Donald Trump":      "donaldtrump.png",
-  "The Boys":          "theboys.png",
-  "Avengers Doomsday": "avengersdoomsday.png",
-  "Macbook Neo":       "macbookneo.png",
-  "America vs Iran":   "americavsiran.png"
-} %}
-{% set hero_img = topic_images.get(current_topic) %}
-{% set _hero_url = url_for('static', filename='images/' ~ hero_img) if hero_img else (topic_cover_url or '') %}
+<div class="analysis-header">
+  <div class="analysis-header-inner">
 
-<div class="analysis-hero {% if not _hero_url %}no-image{% endif %}"
-     {% if _hero_url %}style="--hero-bg: url('{{ _hero_url }}')"{% endif %}>
-  <div class="analysis-hero-inner">
-    <div class="analysis-hero-text">
-      <p class="analysis-label">Sentiment Report</p>
+    <!-- Left: topic name + meta -->
+    <div class="ah-left">
+      <span class="analysis-label">Sentiment Report</span>
       <h2 class="analysis-topic-name">{{ current_topic }}</h2>
       {% if topic_info %}
       <p class="analysis-comment-count">
@@ -258,10 +257,20 @@
       </p>
       {% endif %}
     </div>
+
+    <!-- Right: PSI score + gauge -->
     {% if topic_info and topic_info.rating is not none %}
     {% set r = topic_info.rating | float %}
     {% set pct = ((r + 100) / 200 * 100) %}
-    <div class="analysis-rating-block">
+    <div class="ah-right">
+      <div class="rating-value-row">
+        <span class="rating-score {{ topic_info.sentiment | lower | default('neutral') }}">
+          {% if r > 0 %}+{% endif %}{{ "%.1f" | format(r) }}
+        </span>
+        <span class="sentiment-pill {{ topic_info.sentiment | lower | default('neutral') }}">
+          {{ topic_info.sentiment | upper | default('NEUTRAL') }}
+        </span>
+      </div>
       <div class="rating-gauge">
         <div class="rating-track">
           <div class="rating-center-line"></div>
@@ -274,32 +283,11 @@
         </div>
         <div class="rating-axis"><span>-100</span><span>0</span><span>+100</span></div>
       </div>
-      <div class="rating-value-row">
-        <span class="rating-score {{ topic_info.sentiment | lower | default('neutral') }}">
-          {% if r > 0 %}+{% endif %}{{ "%.1f" | format(r) }}
-        </span>
-        <span class="sentiment-pill {{ topic_info.sentiment | lower | default('neutral') }}">
-          {{ topic_info.sentiment | upper | default('NEUTRAL') }}
-        </span>
-      </div>
       <p class="rating-legend">Composite score: volume · engagement · intensity</p>
-      <p id="gemini-psi-meaning" style="display:none;font-size:0.8rem;color:rgba(245,240,232,0.55);line-height:1.6;margin-top:8px;max-width:320px;"></p>
+      <p id="gemini-psi-meaning" style="display:none;font-size:0.8rem;color:rgba(245,240,232,0.55);line-height:1.6;margin-top:8px;"></p>
     </div>
     {% endif %}
-    {% if has_data %}
-    <div class="export-actions">
-      <button class="export-btn" onclick="exportPDF()">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-          <line x1="16" y1="13" x2="8" y2="13"/>
-          <line x1="16" y1="17" x2="8" y2="17"/>
-          <polyline points="10 9 9 9 8 9"/>
-        </svg>
-        Save as PDF
-      </button>
-    </div>
-    {% endif %}
+
   </div>
 </div>
 
@@ -309,6 +297,27 @@
 <div id="gemini-topic-context-bar" style="display:none;margin:0 auto 0;max-width:900px;padding:14px 28px;border-left:3px solid var(--accent);background:var(--surface-2);">
   <span style="font-size:0.68rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:5px;">AI Context</span>
   <p id="gemini-topic-context-text" style="font-size:0.88rem;color:rgba(245,240,232,0.7);line-height:1.7;margin:0;"></p>
+</div>
+
+<!-- ── AI NARRATIVE REPORT ──────────────────────────────────────── -->
+<div class="narrative-wrap" style="display:none">
+  <div class="narrative-card">
+    <div class="narrative-header">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent);flex-shrink:0"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      <span class="narrative-eyebrow">AI Analysis</span>
+      <span class="narrative-sep">·</span>
+      <span class="narrative-topic-name" id="narrativeTopicLabel"></span>
+    </div>
+    <div id="narrativeCard" class="narrative-body"></div>
+  </div>
+</div>
+
+<!-- ── OPINION CLUSTERS ─────────────────────────────────────────── -->
+<div class="cluster-wrap" style="display:none">
+  <div class="section-question full" style="padding: 0 5%; margin: 24px 0 8px;">Who is saying what?</div>
+  <div style="padding: 0 5%;">
+    <div id="all-clusterGrid" class="cluster-grid"></div>
+  </div>
 </div>
 
 <!-- ── PLATFORM TOGGLE ──────────────────────────────────────────── -->
@@ -436,7 +445,8 @@
   <!-- ── SECTION 3: DEEP DIVE ────────────────────────────────────── -->
   <div class="deep-dive-section full"
        data-topic-id="{{ topic_id_for_deep_dive or '' }}"
-       data-topic-name="{{ current_topic or '' }}">
+       data-topic-name="{{ current_topic or '' }}"
+       data-psi-rating="{{ (topic_info.rating | float) if topic_info and topic_info.rating is not none else 0 }}">
     <button class="deep-dive-toggle" onclick="toggleDeepDive(this,'all')">
       <span class="dd-icon">▶</span>
       <span>Advanced Analytics</span>
@@ -1055,6 +1065,123 @@
 </div><!-- /panel-compare -->
 {% endif %}
 
+<!-- ═══════════════════════════════════════════════════════════════
+     ASK ANYTHING — Gemini Q&A panel
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="ask-panel" id="askPanel">
+  <div class="ask-panel-header">
+    <div class="ask-panel-title">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+      Ask about <strong>{{ current_topic }}</strong>
+    </div>
+    <p class="ask-panel-sub">Ask anything about this topic — Gemini will answer using the real comment data.</p>
+    <div class="ask-suggested-row">
+      <button class="ask-chip" type="button">Why is sentiment this way?</button>
+      <button class="ask-chip" type="button">What do people love most?</button>
+      <button class="ask-chip" type="button">What's the biggest criticism?</button>
+      <button class="ask-chip" type="button">How do Reddit and YouTube differ?</button>
+    </div>
+  </div>
+
+  <div class="ask-messages" id="askMessages"></div>
+
+  <div class="ask-input-row">
+    <input type="text" id="askInput" class="ask-input" placeholder="Ask a question about {{ current_topic }}…" maxlength="500" autocomplete="off">
+    <button class="ask-send-btn" id="askSendBtn" type="button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+    </button>
+  </div>
+</div>
+
+<script>
+(function () {
+  const panel    = document.getElementById('askPanel');
+  const input    = document.getElementById('askInput');
+  const sendBtn  = document.getElementById('askSendBtn');
+  const messages = document.getElementById('askMessages');
+
+  const TOPIC_ID   = "{{ topic_id_for_deep_dive or '' }}";
+  const TOPIC_NAME = {{ current_topic | tojson }};
+  const PSI_RATING = {{ (topic_info.rating if topic_info and topic_info.rating is not none else 0) | float }};
+
+  if (!TOPIC_ID) { panel.style.display = 'none'; }
+
+  function appendMessage(role, text) {
+    const div = document.createElement('div');
+    div.className = 'ask-msg ask-msg-' + role;
+    if (role === 'assistant') {
+      // Render basic markdown: **bold**, *italic*, bullet lines, newlines
+      let html = text
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/^[-•]\s+(.+)$/gm, '<li>$1</li>')
+        .replace(/(<li>.*<\/li>)+/gs, m => '<ul>' + m + '</ul>')
+        .replace(/\n/g, '<br>');
+      div.innerHTML = html;
+    } else {
+      div.textContent = text;
+    }
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
+    return div;
+  }
+
+  function appendTyping() {
+    const div = document.createElement('div');
+    div.className = 'ask-msg ask-msg-assistant ask-msg-typing';
+    div.innerHTML = '<span></span><span></span><span></span>';
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
+    return div;
+  }
+
+  async function sendQuestion(question) {
+    if (!question.trim() || !TOPIC_ID) return;
+    input.value = '';
+    input.disabled = true;
+    sendBtn.disabled = true;
+
+    appendMessage('user', question);
+    const typing = appendTyping();
+
+    try {
+      const body = new FormData();
+      body.append('topic_id',   TOPIC_ID);
+      body.append('topic_name', TOPIC_NAME);
+      body.append('question',   question);
+      body.append('psi_rating', PSI_RATING);
+
+      const res = await fetch('/trends/ask', { method: 'POST', body });
+      const data = await res.json();
+      typing.remove();
+
+      if (data.answer) {
+        appendMessage('assistant', data.answer);
+      } else {
+        appendMessage('assistant', data.error || 'Something went wrong. Please try again.');
+      }
+    } catch (e) {
+      typing.remove();
+      appendMessage('assistant', 'Could not connect. Please check your connection and try again.');
+    } finally {
+      input.disabled = false;
+      sendBtn.disabled = false;
+      input.focus();
+    }
+  }
+
+  sendBtn.addEventListener('click', () => sendQuestion(input.value));
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQuestion(input.value); }
+  });
+
+  document.querySelectorAll('.ask-chip').forEach(chip => {
+    chip.addEventListener('click', () => sendQuestion(chip.textContent));
+  });
+})();
+</script>
+
 {% endif %}{# end has_data #}
 {% endif %}{# end job_status else #}
 {% endif %}{# end current_topic #}
@@ -1455,6 +1582,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const fd = new FormData();
   fd.append('topic_id',   el.dataset.topicId);
   fd.append('topic_name', el.dataset.topicName || '');
+  fd.append('psi_rating', el.dataset.psiRating || '0');
 
   _deepDivePromise = fetch('/trends/deep-dive', { method: 'POST', body: fd })
     .then(r => r.json())
@@ -1463,6 +1591,23 @@ document.addEventListener('DOMContentLoaded', function () {
       _injectGeminiText(data.gemini_all    || data.gemini || {}, 'all');
       _injectGeminiText(data.gemini_reddit || data.gemini || {}, 'reddit');
       _injectGeminiText(data.gemini_youtube|| data.gemini || {}, 'youtube');
+
+      // Narrative report
+      if (data.narrative) {
+        const nb = document.getElementById('narrativeCard');
+        if (nb) {
+          nb.innerHTML = simpleMarkdown(data.narrative);
+          const lbl = document.getElementById('narrativeTopicLabel');
+          if (lbl) lbl.textContent = el.dataset.topicName || '';
+          nb.closest('.narrative-wrap').style.display = '';
+        }
+      }
+
+      // Opinion clusters
+      if (data.clusters?.length) {
+        renderClusters('all-clusterGrid', data.clusters);
+      }
+
       return data;
     })
     .catch(err => { console.warn('[deep-dive] prefetch failed:', err); return null; });
@@ -1537,6 +1682,33 @@ function _initDeepDiveFromData(panelId, data) {
     const key = _GEMINI_KEY[suffix];
     if (key && gemini[key]) { el.textContent = gemini[key]; el.style.display = ''; }
   });
+}
+
+function simpleMarkdown(text) {
+  return text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/^[-•]\s+(.+)$/gm,'<li>$1</li>')
+    .replace(/(<li>[\s\S]*?<\/li>)+/g, m => '<ul>' + m + '</ul>')
+    .replace(/\n\n+/g,'</p><p>')
+    .replace(/\n/g,'<br>')
+    .replace(/^(?!<[uo]l|<li|<p|<br)/, '<p>')
+    .replace(/(?<!>)$/, '</p>');
+}
+
+function renderClusters(containerId, clusters) {
+  const el = document.getElementById(containerId);
+  if (!el || !clusters?.length) return;
+  el.innerHTML = clusters.map(c => `
+    <div class="cluster-card">
+      <div class="cluster-pct">${c.pct}%</div>
+      <div class="cluster-label">${c.label}</div>
+      <p class="cluster-summary">${c.summary}</p>
+      <blockquote class="cluster-quote">"${c.quote}"</blockquote>
+    </div>
+  `).join('');
+  el.closest('.cluster-wrap').style.display = '';
 }
 
 function _injectGeminiText(gemini, tab) {
@@ -1997,5 +2169,111 @@ document.addEventListener('DOMContentLoaded', function () {
 
     }, 300);
   };
+</script>
+
+<script>
+// ── Trends search autocomplete ────────────────────────────────
+(function () {
+  var SUGGESTIONS = [];
+  try { SUGGESTIONS = JSON.parse(document.getElementById('psi-trends-suggestions').textContent) || []; } catch (e) {}
+
+  const input    = document.getElementById('trendsSearchInput');
+  const dropdown = document.getElementById('trendsSearchDropdown');
+  if (!input || !dropdown) return;
+
+  let activeIdx = -1;
+
+  const FEATURED_IMG = {
+    'Donald Trump':      'donaldtrump.png',
+    'The Boys':          'theboys.png',
+    'Avengers Doomsday': 'avengersdoomsday.png',
+    'Macbook Neo':       'macbookneo.png',
+    'America vs Iran':   'americavsiran.png',
+  };
+
+  function getFiltered(q) {
+    const lq = q.trim().toLowerCase();
+    if (!lq) return SUGGESTIONS;
+    return SUGGESTIONS.filter(s => s.name.toLowerCase().includes(lq));
+  }
+
+  function renderDropdown(items) {
+    if (!items.length) { dropdown.classList.remove('open'); return; }
+
+    const featured = items.filter(s => s.kind === 'featured');
+    const saved    = items.filter(s => s.kind !== 'featured');
+    let html = '';
+
+    if (featured.length) {
+      html += `<div class="dd-section-head">Featured Topics</div>`;
+      html += featured.map(s => {
+        const imgFile = s.img || FEATURED_IMG[s.name] || '';
+        const img = imgFile
+          ? `<div class="dd-img-wrap"><img class="dd-thumb" src="/static/images/${imgFile}" alt="" loading="lazy"></div>`
+          : `<div class="dd-img-wrap dd-img-placeholder"></div>`;
+        return `<div class="tsd-option dd-featured" data-name="${s.name}">
+          ${img}
+          <span class="topic-option-name">${s.name}</span>
+          <span class="topic-badge topic-badge-featured">Featured</span>
+        </div>`;
+      }).join('');
+    }
+
+    if (saved.length) {
+      html += `<div class="dd-section-head">Your Scans</div>`;
+      html += saved.map(s => {
+        const initial = s.name.trim().charAt(0).toUpperCase();
+        return `<div class="tsd-option dd-saved" data-name="${s.name}">
+          <div class="dd-initials">${initial}</div>
+          <span class="topic-option-name">${s.name}</span>
+          <span class="topic-badge topic-badge-saved">Scan</span>
+        </div>`;
+      }).join('');
+    }
+
+    dropdown.innerHTML = html;
+    dropdown.querySelectorAll('.tsd-option').forEach(el => {
+      el.addEventListener('mousedown', e => {
+        e.preventDefault();
+        input.value = el.dataset.name;
+        dropdown.classList.remove('open');
+        activeIdx = -1;
+      });
+    });
+    activeIdx = -1;
+    dropdown.classList.add('open');
+  }
+
+  function updateActive() {
+    const opts = dropdown.querySelectorAll('.tsd-option');
+    opts.forEach((el, i) => {
+      el.classList.toggle('active', i === activeIdx);
+      if (i === activeIdx) el.scrollIntoView({ block: 'nearest' });
+    });
+  }
+
+  input.addEventListener('focus', () => renderDropdown(getFiltered(input.value)));
+  input.addEventListener('input', () => renderDropdown(getFiltered(input.value)));
+
+  input.addEventListener('keydown', e => {
+    const opts = dropdown.querySelectorAll('.tsd-option');
+    if (!dropdown.classList.contains('open')) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault(); activeIdx = Math.min(activeIdx + 1, opts.length - 1); updateActive();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault(); activeIdx = Math.max(activeIdx - 1, 0); updateActive();
+    } else if (e.key === 'Enter' && activeIdx >= 0) {
+      e.preventDefault();
+      input.value = opts[activeIdx].dataset.name;
+      dropdown.classList.remove('open'); activeIdx = -1;
+    } else if (e.key === 'Escape') {
+      dropdown.classList.remove('open'); activeIdx = -1;
+    }
+  });
+
+  input.addEventListener('blur', () => {
+    setTimeout(() => { dropdown.classList.remove('open'); activeIdx = -1; }, 150);
+  });
+})();
 </script>
 {% endblock %}

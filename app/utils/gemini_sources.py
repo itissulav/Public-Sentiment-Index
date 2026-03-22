@@ -93,24 +93,22 @@ def _basic_fallback(topic_name: str) -> dict:
 
 
 def _make_gemini_client():
-    """Return (client, model_id) — Vertex AI preferred, AI Studio as fallback."""
+    """Return (client, model_id) — Vertex AI only."""
     project = os.getenv("GOOGLE_CLOUD_PROJECT")
-    if project:
-        try:
-            from google import genai as _genai
-            client = _genai.Client(
-                vertexai=True,
-                project=project,
-                location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"),
-            )
-            return client, "gemini-2.5-flash-lite"
-        except Exception as e:
-            print(f"[gemini] Vertex AI client init failed: {e} — trying AI Studio")
-    api_key = os.getenv("GEMINI_API_KEY")
-    if api_key:
+    if not project:
+        print("[gemini] GOOGLE_CLOUD_PROJECT not set — Gemini unavailable")
+        return None, None
+    try:
         from google import genai as _genai
-        return _genai.Client(api_key=api_key), "gemini-2.5-flash-lite"
-    return None, None
+        client = _genai.Client(
+            vertexai=True,
+            project=project,
+            location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"),
+        )
+        return client, "gemini-2.5-flash-lite"
+    except Exception as e:
+        print(f"[gemini] Vertex AI client init failed: {e}")
+        return None, None
 
 
 def get_sources_for_topic(topic_name: str) -> dict:

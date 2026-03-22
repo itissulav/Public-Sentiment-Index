@@ -13,74 +13,67 @@
 </script>
 
 <!-- ============================================================
-     PAGE HEADER & TOPIC PICKERS
+     COMPARE LANDING
      ============================================================ -->
-<div class="compare-header">
-  <h1>Compare Topics</h1>
-  <p>Pick two topics to see how public sentiment differs — combine predefined topics, your saved scans, or search something new.</p>
+<div class="compare-landing">
+  <div class="compare-landing-inner">
 
-  <form method="POST" action="{{ url_for('main.compare') }}" id="compareForm" class="compare-form">
-    <div class="picker-row">
-
-      <!-- Topic A -->
-      <div class="picker-box topic-a-box">
-        <label class="picker-label">Topic A</label>
-        <div class="picker-wrapper">
-          <input
-            type="text"
-            name="topic_a"
-            id="inputA"
-            autocomplete="off"
-            placeholder="Search or pick a topic…"
-            required
-            class="picker-input"
-            value="{{ topic_a_name or '' }}"
-          />
-          <div class="topic-dropdown" id="dropdownA"></div>
-        </div>
-      </div>
-
-      <!-- VS divider -->
-      <div class="vs-badge">VS</div>
-
-      <!-- Topic B -->
-      <div class="picker-box topic-b-box">
-        <label class="picker-label">Topic B</label>
-        <div class="picker-wrapper">
-          <input
-            type="text"
-            name="topic_b"
-            id="inputB"
-            autocomplete="off"
-            placeholder="Search or pick a topic…"
-            required
-            class="picker-input"
-            value="{{ topic_b_name or '' }}"
-          />
-          <div class="topic-dropdown" id="dropdownB"></div>
-        </div>
-      </div>
-
-    </div><!-- .picker-row -->
-
-    <button type="submit" class="compare-btn" id="compareBtn">
-      Compare Now
-    </button>
-
-    <!-- Loading bar (shown on submit) -->
-    <div id="compareLoader" style="display:none; width:100%; max-width:700px; margin-top:18px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-        <span id="loaderText" style="color:var(--accent-cyan); font-size:0.9rem; font-weight:500;">
-          <span class="c-spinner"></span> Fetching and analysing topics…
-        </span>
-        <span id="loaderPct" style="color:var(--text-muted); font-size:0.82rem; font-weight:600;">0%</span>
-      </div>
-      <div style="width:100%; height:5px; background:rgba(15,23,42,0.8); border-radius:10px; overflow:hidden;">
-        <div id="loaderBar" style="width:0%; height:100%; background:linear-gradient(90deg,#4facfe,#00f2fe,#a855f7); transition:width 0.3s ease;"></div>
-      </div>
+    <div class="compare-landing-copy">
+      <span class="cl-eyebrow">Head-to-head analysis</span>
+      <h1 class="cl-title">Compare any two topics</h1>
+      <p class="cl-sub">Pick two topics to see how public sentiment differs across Reddit and YouTube — powered by AI.</p>
     </div>
 
-  </form>
+    <form method="POST" action="{{ url_for('main.compare') }}" id="compareForm" class="compare-form">
+
+      <div class="picker-row">
+
+        <!-- Topic A -->
+        <div class="picker-box topic-a-box">
+          <label class="picker-label" for="inputA">Topic A</label>
+          <div class="picker-wrapper">
+            <input type="text" name="topic_a" id="inputA" autocomplete="off"
+                   placeholder="Type a topic…" required class="picker-input"
+                   value="{{ topic_a_name or '' }}" />
+            <div class="topic-dropdown" id="dropdownA"></div>
+          </div>
+        </div>
+
+        <!-- VS -->
+        <div class="vs-badge">VS</div>
+
+        <!-- Topic B -->
+        <div class="picker-box topic-b-box">
+          <label class="picker-label" for="inputB">Topic B</label>
+          <div class="picker-wrapper">
+            <input type="text" name="topic_b" id="inputB" autocomplete="off"
+                   placeholder="Type a topic…" required class="picker-input"
+                   value="{{ topic_b_name or '' }}" />
+            <div class="topic-dropdown" id="dropdownB"></div>
+          </div>
+        </div>
+
+      </div><!-- .picker-row -->
+
+      <div class="compare-submit-row">
+        <button type="submit" class="compare-btn" id="compareBtn">Compare Now</button>
+
+        <!-- Loading bar -->
+        <div id="compareLoader" style="display:none; flex:1; min-width:220px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <span id="loaderText" style="color:var(--text-2); font-size:0.85rem; font-weight:500;">
+              <span class="c-spinner"></span> Fetching and analysing topics…
+            </span>
+            <span id="loaderPct" style="color:var(--text-muted); font-size:0.8rem; font-weight:600;">0%</span>
+          </div>
+          <div style="width:100%; height:3px; background:rgba(255,255,255,0.07); overflow:hidden;">
+            <div id="loaderBar" style="width:0%; height:100%; background:var(--accent); transition:width 0.3s ease;"></div>
+          </div>
+        </div>
+      </div>
+
+    </form>
+  </div>
 </div>
 
 
@@ -348,17 +341,21 @@
 
   <!-- ── AI OVERVIEW ───────────────────────────────────────── -->
   {% if gemini_compare and gemini_compare.overview %}
-  <div class="c-gemini-overview">
-    <span class="c-ai-label">AI Overview</span>
-    <p class="c-ai-text">{{ gemini_compare.overview }}</p>
+  <div style="padding: 0 5%;">
+    <div class="c-gemini-overview">
+      <span class="c-ai-label">AI Overview</span>
+      <p class="c-ai-text">{{ gemini_compare.overview }}</p>
+    </div>
   </div>
   {% endif %}
 
   <!-- ── SOURCE TABS ───────────────────────────────────────── -->
-  <div class="compare-tab-strip">
-    <button class="compare-tab active" onclick="switchCompareTab('all', this)">Overall</button>
-    <button class="compare-tab" onclick="switchCompareTab('reddit', this)">Reddit</button>
-    <button class="compare-tab" onclick="switchCompareTab('youtube', this)">YouTube</button>
+  <div style="padding: 0 5%;">
+    <div class="compare-tab-strip">
+      <button class="compare-tab active" onclick="switchCompareTab('all', this)">Overall</button>
+      <button class="compare-tab" onclick="switchCompareTab('reddit', this)">Reddit</button>
+      <button class="compare-tab" onclick="switchCompareTab('youtube', this)">YouTube</button>
+    </div>
   </div>
 
   <!-- ── PANELS ────────────────────────────────────────────── -->

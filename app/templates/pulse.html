@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+{% block title %}Sentiment Pulse{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/pulse.css') }}">{% endblock %}
+
+{% block content %}
+
+<!-- ═══════════════════════════════════════════════════════════════
+     HERO
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="pulse-hero">
+  <div class="pulse-hero-inner">
+    <span class="pulse-eyebrow">Live Tracking</span>
+    <h1 class="pulse-title">Sentiment Pulse</h1>
+    <p class="pulse-sub">PSI ratings across all tracked topics — last 90 days</p>
+    <div class="pulse-period-row">
+      <button class="pulse-period-btn active" data-days="30">30D</button>
+      <button class="pulse-period-btn" data-days="60">60D</button>
+      <button class="pulse-period-btn" data-days="90">90D</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SHIFT DETECTION BANNER
+     ═══════════════════════════════════════════════════════════════ -->
+{% if shifts %}
+<div class="shift-banner">
+  <span class="shift-eyebrow">Shift Detected</span>
+  {% for s in shifts %}
+  <div class="shift-item shift-{{ s.direction }}">
+    <span class="shift-name">{{ s.name }}</span>
+    <span class="shift-delta">{% if s.direction == 'up' %}+{% endif %}{{ s.delta }} pts overnight</span>
+    <span class="shift-psi">PSI now {{ s.latest_psi }}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- ═══════════════════════════════════════════════════════════════
+     MARKET MOVERS (JS-rendered so it updates with period toggle)
+     ═══════════════════════════════════════════════════════════════ -->
+<div id="pulseMovers" class="pulse-movers"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     MAIN MULTI-LINE CHART
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="pulse-chart-section">
+  <div class="pulse-chart-header">
+    <span class="pulse-chart-label">PSI Rating Over Time</span>
+    <span class="pulse-chart-sub">-100 (very negative) → +100 (very positive)</span>
+  </div>
+  <div class="pulse-chart-wrap">
+    <canvas id="pulseChart"></canvas>
+  </div>
+  <div class="pulse-legend" id="pulseLegend"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     EMOTION HEATMAP
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="pulse-heatmap-section">
+  <div class="pulse-heatmap-header">
+    <span class="pulse-chart-label">Dominant Emotion</span>
+    <span class="pulse-chart-sub">Each cell = one day. <span class="hm-legend-pos">■</span> Positive · <span class="hm-legend-neg">■</span> Negative · <span class="hm-legend-neu">■</span> Neutral</span>
+  </div>
+  <div id="pulseHeatmap" class="pulse-heatmap"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     CHART.JS + INLINE DATA + JS
+     ═══════════════════════════════════════════════════════════════ -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const PULSE_DATA = {{ pulse_data | safe }};
+
+const TOPIC_COLORS = {
+  "Donald Trump":      "#3b82f6",
+  "The Boys":          "#f59e0b",
+  "Avengers Doomsday": "#a855f7",
+  "Macbook Neo":       "#10b981",
+  "America vs Iran":   "#ef4444",
+};
+
+const DEFAULT_COLORS = ["#3b82f6","#f59e0b","#a855f7","#10b981","#ef4444","#ec4899","#06b6d4"];
+
+// ── Build unified date axis ──────────────────────────────────────
+function buildAllDates(data) {
+  const set = new Set();
+  Object.values(data).forEach(t => t.dates.forEach(d => set.add(d)));
+  return [...set].sort();
+}
+
+function alignSeries(dates, topicDates, topicValues) {
+  const map = {};
+  topicDates.forEach((d, i) => { map[d] = topicValues[i]; });
+  return dates.map(d => map[d] !== undefined ? map[d] : null);
+}
+
+// ── Chart init ───────────────────────────────────────────────────
+let pulseChart = null;
+let allDates   = buildAllDates(PULSE_DATA);
+let activeDays = 30;
+
+function filterDates(days) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const cutoffStr = cutoff.toISOString().split('T')[0];
+  return allDates.filter(d => d >= cutoffStr);
+}
+
+function buildDatasets(dates) {
+  return Object.entries(PULSE_DATA).map(([name, t], i) => ({
+    label: name,
+    data: alignSeries(dates, t.dates, t.psi),
+    borderColor: TOPIC_COLORS[name] || DEFAULT_COLORS[i % DEFAULT_COLORS.length],
+    backgroundColor: 'transparent',
+    tension: 0.4,
+    pointRadius: 0,
+    borderWidth: 2,
+    spanGaps: true,
+  }));
+}
+
+function initChart(days) {
+  const dates = filterDates(days);
+  const datasets = buildDatasets(dates);
+
+  if (pulseChart) { pulseChart.destroy(); }
+
+  pulseChart = new Chart(document.getElementById('pulseChart'), {
+    type: 'line',
+    data: { labels: dates, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(12,12,13,0.95)',
+          borderColor: 'rgba(255,255,255,0.08)',
+          borderWidth: 1,
+          titleColor: '#f5f0e8',
+          bodyColor: 'rgba(245,240,232,0.65)',
+          padding: 12,
+          callbacks: {
+            label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y !== null ? ctx.parsed.y : '—'}`
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: 'rgba(245,240,232,0.35)', maxTicksLimit: 8, font: { size: 11 } },
+          grid:  { color: 'rgba(255,255,255,0.04)' }
+        },
+        y: {
+          min: -100, max: 100,
+          ticks: { color: 'rgba(245,240,232,0.35)', font: { size: 11 } },
+          grid:  { color: 'rgba(255,255,255,0.04)' }
+        }
+      }
+    }
+  });
+}
+
+// ── Legend ───────────────────────────────────────────────────────
+function buildLegend() {
+  const el = document.getElementById('pulseLegend');
+  if (!el) return;
+  el.innerHTML = Object.entries(PULSE_DATA).map(([name], i) => {
+    const color = TOPIC_COLORS[name] || DEFAULT_COLORS[i % DEFAULT_COLORS.length];
+    return `<span class="pulse-legend-item"><span class="pulse-legend-dot" style="background:${color}"></span>${name}</span>`;
+  }).join('');
+}
+
+// ── Market Movers ────────────────────────────────────────────────
+function buildMovers(days) {
+  const el = document.getElementById('pulseMovers');
+  if (!el) return;
+
+  const dates = filterDates(days);
+  if (dates.length < 2) { el.innerHTML = ''; return; }
+
+  const movers = Object.entries(PULSE_DATA).map(([name, t], i) => {
+    const aligned = alignSeries(dates, t.dates, t.psi);
+    const values = aligned.filter(v => v !== null);
+    if (values.length < 2) return null;
+    const latest   = values[values.length - 1];
+    const earliest = values[0];
+    const delta    = Math.round((latest - earliest) * 10) / 10;
+    const direction = delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat';
+    return { name, latest_psi: latest, delta, direction };
+  }).filter(Boolean);
+
+  movers.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  const top = movers.slice(0, 3);
+
+  el.innerHTML = top.map(m => {
+    const arrow = m.direction === 'up' ? '↑' : m.direction === 'down' ? '↓' : '—';
+    const label = m.direction === 'up' ? 'Rising' : m.direction === 'down' ? 'Falling' : 'Stable';
+    return `
+      <div class="mover-card mover-${m.direction}">
+        <div class="mover-name">${m.name}</div>
+        <div class="mover-psi">${m.latest_psi}</div>
+        <div class="mover-delta">${arrow} ${Math.abs(m.delta)} pts over ${days}d</div>
+        <div class="mover-label">${label}</div>
+      </div>`;
+  }).join('');
+}
+
+// ── Period toggle ────────────────────────────────────────────────
+document.querySelectorAll('.pulse-period-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.pulse-period-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeDays = parseInt(btn.dataset.days);
+    initChart(activeDays);
+    buildMovers(activeDays);
+    buildHeatmap(activeDays);
+  });
+});
+
+// ── Emotion Heatmap ──────────────────────────────────────────────
+const EMO_COLORS = {
+  positive:  'rgba(16,185,129,0.55)',
+  negative:  'rgba(239,68,68,0.55)',
+  neutral:   'rgba(100,116,139,0.35)',
+  joy:       'rgba(16,185,129,0.55)',
+  anger:     'rgba(239,68,68,0.55)',
+  sadness:   'rgba(59,130,246,0.55)',
+  fear:      'rgba(168,85,247,0.55)',
+  optimism:  'rgba(245,158,11,0.55)',
+  mixed:     'rgba(100,116,139,0.35)',
+};
+
+function buildHeatmap(days) {
+  const el = document.getElementById('pulseHeatmap');
+  if (!el) return;
+
+  const dates = filterDates(days);
+  const topics = Object.keys(PULSE_DATA);
+
+  // Header row (dates — show every 7th)
+  let html = '<div class="hm-grid" style="--hm-cols:' + (dates.length + 1) + '">';
+
+  // Corner cell
+  html += '<div class="hm-cell hm-corner"></div>';
+  dates.forEach((d, i) => {
+    const lbl = (i % 7 === 0) ? d.slice(5) : '';
+    html += `<div class="hm-cell hm-date-label">${lbl}</div>`;
+  });
+
+  topics.forEach(name => {
+    const t = PULSE_DATA[name];
+    const emoMap = {};
+    t.dates.forEach((d, i) => { emoMap[d] = (t.emotions[i] || 'neutral').toLowerCase(); });
+
+    html += `<div class="hm-cell hm-topic-label">${name}</div>`;
+    dates.forEach(d => {
+      const emo = emoMap[d] || null;
+      const col = emo ? (EMO_COLORS[emo] || EMO_COLORS.neutral) : 'rgba(255,255,255,0.04)';
+      const title = emo ? `${d}: ${emo}` : `${d}: no data`;
+      html += `<div class="hm-cell hm-data" style="background:${col}" title="${title}"></div>`;
+    });
+  });
+
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+// ── Init ─────────────────────────────────────────────────────────
+initChart(activeDays);
+buildLegend();
+buildMovers(activeDays);
+buildHeatmap(activeDays);
+</script>
+
+{% endblock %}

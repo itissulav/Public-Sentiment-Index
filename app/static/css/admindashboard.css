@@ -2,8 +2,8 @@
 
 .dashboard-header {
   padding: 60px 5% 40px;
-  background: linear-gradient(180deg, rgba(30, 41, 59, 0.6) 0%, transparent 100%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: linear-gradient(180deg, rgba(255, 75, 31, 0.04) 0%, transparent 100%);
+  border-bottom: 1px solid var(--border);
   margin-bottom: 40px;
 }
 
@@ -259,7 +259,7 @@
 }
 
 .highlight {
-  color: #a855f7;
+  color: var(--accent);
   font-weight: 600;
 }
 
@@ -273,9 +273,9 @@
 }
 
 .role-badge.admin {
-  background: rgba(168, 85, 247, 0.2);
-  color: #c084fc;
-  border: 1px solid rgba(168, 85, 247, 0.4);
+  background: rgba(120, 70, 190, 0.15);
+  color: #a070d8;
+  border: 1px solid rgba(120, 70, 190, 0.35);
 }
 
 .role-badge.user, .role-badge.review {
@@ -540,7 +540,7 @@
 
 .btn-submit:hover {
   transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(0, 242, 254, 0.4);
+  box-shadow: 0 5px 15px var(--accent-glow);
 }
 
 .btn-cancel {
@@ -566,9 +566,9 @@
   gap: 6px;
   padding: 7px 16px;
   border-radius: 10px;
-  background: rgba(0, 242, 254, 0.07);
+  background: var(--accent-dim);
   border: 1px solid var(--accent-glow);
-  color: var(--primary);
+  color: var(--accent);
   font-size: 0.82rem;
   font-weight: 600;
   font-family: inherit;
@@ -578,10 +578,10 @@
 }
 
 .btn-analyse:hover:not(:disabled) {
-  background: rgba(0, 242, 254, 0.15);
-  border-color: rgba(0, 242, 254, 0.6);
+  background: rgba(255, 75, 31, 0.15);
+  border-color: rgba(255, 75, 31, 0.5);
   transform: translateY(-1px);
-  box-shadow: 0 4px 14px var(--accent-dim);
+  box-shadow: 0 4px 14px var(--accent-glow);
 }
 
 .btn-analyse:disabled {
@@ -601,7 +601,7 @@
   width: 12px;
   height: 12px;
   border: 2px solid var(--accent-dim);
-  border-top-color: var(--primary);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: cspin 0.8s linear infinite;
   vertical-align: middle;

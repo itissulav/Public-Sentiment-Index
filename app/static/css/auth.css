@@ -6,7 +6,7 @@
   align-items: center;
   min-height: 80vh;
   padding: 40px 20px;
-  background: radial-gradient(circle at center, rgba(168, 85, 247, 0.05), transparent 70%);
+  background: radial-gradient(circle at center, rgba(255, 75, 31, 0.04), transparent 70%);
 }
 
 .auth-container {
@@ -75,9 +75,9 @@
 
 .form-group input:focus {
   outline: none;
-  border-color: var(--primary);
-  background-color: rgba(15, 23, 42, 0.9);
-  box-shadow: 0 0 0 4px rgba(0, 242, 254, 0.1);
+  border-color: var(--accent-glow);
+  background-color: rgba(6, 6, 7, 0.9);
+  box-shadow: 0 0 0 3px var(--accent-dim);
 }
 
 .input-hint {
@@ -90,26 +90,27 @@
 /* Buttons */
 .btn-primary {
   width: 100%;
-  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
-  color: #0b0f19;
+  background: var(--accent);
+  color: #fff;
   padding: 14px;
-  border-radius: 12px;
+  border-radius: 8px;
   font-weight: 700;
-  font-size: 1.05rem;
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   border: none;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: background 0.15s ease;
   margin-top: 10px;
-  box-shadow: 0 8px 20px rgba(0, 242, 254, 0.2);
+  box-shadow: 0 4px 16px var(--accent-glow);
 }
 
 .btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 25px rgba(0, 242, 254, 0.4);
+  background: #e03a0e;
 }
 
 .btn-primary:active {
-  transform: translateY(1px);
+  background: #c4330b;
 }
 
 /* Footer / Links */

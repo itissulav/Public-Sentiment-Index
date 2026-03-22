@@ -1,13 +1,36 @@
+# Virtual environments
 .venv/
+venv/
+
+# Python bytecode
 __pycache__/
-.env
+**/__pycache__/
 *.pyc
+*.pyo
+
+# Environment & secrets — NEVER commit these
+.env
+.env.*
+*service-account*.json
+*-key.json
+*credentials*.json
+
+# IDE
 .idea/
 .vscode/
 
-# Analysed CSV output (moved to _dev/analysed)
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Flask instance folder
+instance/
+
+# Analysed CSV output
 app/static/analysed/
 
 # Dev-only files: tests, debug logs, planning docs, seed scripts
 _dev/
-_dev/credentials/

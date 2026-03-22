@@ -4,8 +4,9 @@
    TOKENS
    ============================================================ */
 :root {
-  --sidebar-w:        60px;
-  --sidebar-expanded: 220px;
+  --sidebar-w:        62px;
+  --sidebar-expanded: 228px;
+  --nav-gap:          14px;
 
   /* Surfaces — deep editorial black */
   --bg:               #060607;
@@ -77,33 +78,46 @@ h1, h2, h3, h4, h5, h6 {
 a { color: inherit; text-decoration: none; }
 
 /* ============================================================
-   SIDEBAR
+   SIDEBAR — Floating detached pill
    ============================================================ */
 .sidebar {
   position: fixed;
-  left: 0; top: 0; bottom: 0;
+  left: var(--nav-gap);
+  top: var(--nav-gap);
+  bottom: var(--nav-gap);
   width: var(--sidebar-w);
-  background: var(--surface);
-  border-right: 1px solid var(--border);
+  background: rgba(15, 14, 18, 0.92);
+  border: 1px solid var(--border-2);
+  border-radius: 20px;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.55),
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(245, 240, 232, 0.04);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   display: flex;
   flex-direction: column;
   z-index: 200;
   overflow: hidden;
-  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.26s cubic-bezier(0.4, 0, 0.2, 1);
   will-change: width;
 }
 
 .sidebar:hover {
   width: var(--sidebar-expanded);
-  box-shadow: 6px 0 40px rgba(0, 0, 0, 0.7);
+  box-shadow:
+    0 16px 56px rgba(0, 0, 0, 0.7),
+    0 4px 16px rgba(0, 0, 0, 0.4),
+    0 0 0 1px var(--border-2),
+    inset 0 1px 0 rgba(245, 240, 232, 0.06);
 }
 
-/* Brand */
+/* ── Brand ──────────────────────────────────────────────── */
 .sidebar-brand {
-  height: 60px;
+  height: 58px;
   display: flex;
   align-items: center;
-  padding: 0 18px;
+  padding: 0 19px;
   gap: 12px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -130,12 +144,12 @@ a { color: inherit; text-decoration: none; }
   letter-spacing: 0.04em;
   white-space: nowrap;
   opacity: 0;
-  transition: opacity 0.14s ease 0.07s;
+  transition: opacity 0.14s ease 0.08s;
 }
 
 .sidebar:hover .brand-name { opacity: 1; }
 
-/* Nav sections */
+/* ── Nav sections ───────────────────────────────────────── */
 .sidebar-nav {
   flex: 1;
   padding: 10px 0;
@@ -148,12 +162,12 @@ a { color: inherit; text-decoration: none; }
   flex-shrink: 0;
 }
 
-/* Nav items */
+/* ── Nav items ──────────────────────────────────────────── */
 .sidebar-item {
   display: flex;
   align-items: center;
   height: 42px;
-  padding: 0 18px;
+  padding: 0 19px;
   gap: 12px;
   white-space: nowrap;
   overflow: hidden;
@@ -192,13 +206,13 @@ a { color: inherit; text-decoration: none; }
 
 .item-label {
   opacity: 0;
-  transition: opacity 0.14s ease 0.07s;
+  transition: opacity 0.14s ease 0.08s;
   letter-spacing: 0.01em;
 }
 
 .sidebar:hover .item-label { opacity: 1; }
 
-/* Profile item (taller, has name + role) */
+/* ── Profile item (taller) ──────────────────────────────── */
 .sidebar-profile {
   height: 52px;
   gap: 10px;
@@ -233,7 +247,7 @@ a { color: inherit; text-decoration: none; }
   gap: 1px;
   min-width: 0;
   opacity: 0;
-  transition: opacity 0.14s ease 0.07s;
+  transition: opacity 0.14s ease 0.08s;
 }
 
 .sidebar:hover .sidebar-user-meta { opacity: 1; }
@@ -266,10 +280,10 @@ a { color: inherit; text-decoration: none; }
 }
 
 /* ============================================================
-   PAGE CONTENT
+   PAGE CONTENT — offset accounts for floating nav gap
    ============================================================ */
 .content-wrapper {
-  margin-left: var(--sidebar-w);
+  margin-left: calc(var(--sidebar-w) + var(--nav-gap) * 2);
   min-height: 100vh;
 }
 
@@ -310,14 +324,17 @@ a { color: inherit; text-decoration: none; }
   .sidebar-mobile-btn { display: flex; }
 
   .sidebar {
-    transform: translateX(-100%);
+    transform: translateX(calc(-100% - var(--nav-gap)));
     width: var(--sidebar-expanded);
-    transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    /* on mobile: full height flush with edge, no floating */
+    top: 0; bottom: 0; left: 0;
+    border-radius: 0 20px 20px 0;
+    transition: transform 0.24s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .sidebar.open {
     transform: translateX(0);
-    box-shadow: 6px 0 40px rgba(0, 0, 0, 0.6);
+    box-shadow: 8px 0 48px rgba(0, 0, 0, 0.65);
   }
 
   .sidebar.open .item-label,

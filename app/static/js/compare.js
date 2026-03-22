@@ -33,15 +33,37 @@
     function renderDropdown(items) {
       if (!items.length) { dropdown.classList.remove('open'); return; }
 
-      dropdown.innerHTML = items.map((s, i) => {
-        const isFeatured = s.kind === 'featured';
-        const badgeClass = isFeatured ? 'topic-badge-featured' : 'topic-badge-saved';
-        const badgeText  = isFeatured ? '⭐ Featured' : '📁 Your Scan';
-        return `<div class="topic-option" data-idx="${i}" data-name="${s.name}">
-          <span class="topic-option-name">${s.name}</span>
-          <span class="topic-badge ${badgeClass}">${badgeText}</span>
-        </div>`;
-      }).join('');
+      const featured = items.filter(s => s.kind === 'featured');
+      const saved    = items.filter(s => s.kind !== 'featured');
+      let html = '';
+
+      if (featured.length) {
+        html += `<div class="dd-section-head">Featured Topics</div>`;
+        html += featured.map(s => {
+          const img = s.img
+            ? `<div class="dd-img-wrap"><img class="dd-thumb" src="/static/images/${s.img}" alt="" loading="lazy"></div>`
+            : `<div class="dd-img-wrap dd-img-placeholder"></div>`;
+          return `<div class="topic-option dd-featured" data-name="${s.name}">
+            ${img}
+            <span class="topic-option-name">${s.name}</span>
+            <span class="topic-badge topic-badge-featured">Featured</span>
+          </div>`;
+        }).join('');
+      }
+
+      if (saved.length) {
+        html += `<div class="dd-section-head">Your Scans</div>`;
+        html += saved.map(s => {
+          const initial = s.name.trim().charAt(0).toUpperCase();
+          return `<div class="topic-option dd-saved" data-name="${s.name}">
+            <div class="dd-initials">${initial}</div>
+            <span class="topic-option-name">${s.name}</span>
+            <span class="topic-badge topic-badge-saved">Scan</span>
+          </div>`;
+        }).join('');
+      }
+
+      dropdown.innerHTML = html;
 
       dropdown.querySelectorAll('.topic-option').forEach(el => {
         el.addEventListener('mousedown', e => {

@@ -1,10 +1,5 @@
 /* app/static/css/profile.css */
 
-:root {
-  --accent-blue:   #5a9fd4;
-  --accent-purple: #9060c8;
-}
-
 /* ── Page wrapper ────────────────────────────────────────── */
 .profile-page {
   max-width: 1100px;
@@ -68,20 +63,24 @@
   width: 84px;
   height: 84px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+  background: var(--accent-dim);
+  border: 2px solid var(--accent-glow);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.9rem;
   font-weight: 800;
-  color: #fff;
+  color: var(--accent);
   letter-spacing: 1px;
-  box-shadow: 0 0 0 4px rgba(79, 172, 254, 0.15), 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 0 4px rgba(255, 75, 31, 0.08), 0 8px 24px rgba(0, 0, 0, 0.4);
+  font-family: 'Syne', sans-serif;
 }
 
 .profile-avatar.avatar-admin {
-  background: linear-gradient(135deg, var(--accent-purple), #ec4899);
-  box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.15), 0 8px 24px rgba(0, 0, 0, 0.4);
+  background: rgba(120, 70, 190, 0.12);
+  border-color: rgba(120, 70, 190, 0.35);
+  color: #a070d8;
+  box-shadow: 0 0 0 4px rgba(120, 70, 190, 0.08), 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
 .profile-role-badge {
@@ -100,9 +99,9 @@
 }
 
 .badge-user {
-  background: rgba(0, 242, 254, 0.1);
-  border: 1px solid rgba(0, 242, 254, 0.3);
-  color: var(--accent-cyan);
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-glow);
+  color: var(--accent);
 }
 
 .profile-name {
@@ -242,8 +241,8 @@
 }
 
 .form-input:focus {
-  border-color: rgba(79, 172, 254, 0.5);
-  box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1);
+  border-color: var(--accent-glow);
+  box-shadow: 0 0 0 3px var(--accent-dim);
 }
 
 .form-input:disabled {
@@ -289,22 +288,23 @@
 }
 
 .btn-save {
-  padding: 13px 44px;
-  border-radius: 30px;
-  background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+  padding: 12px 40px;
+  border-radius: 4px;
+  background: var(--accent);
   color: #fff;
   border: none;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   font-weight: 700;
-  font-family: inherit;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-family: 'DM Sans', sans-serif;
   cursor: pointer;
-  transition: all 0.25s ease;
-  box-shadow: 0 4px 20px rgba(79, 172, 254, 0.25);
+  transition: background 0.15s ease;
+  box-shadow: 0 4px 16px var(--accent-glow);
 }
 
 .btn-save:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 28px rgba(79, 172, 254, 0.4);
+  background: #e03a0e;
 }
 
 /* ── Responsive ──────────────────────────────────────────── */

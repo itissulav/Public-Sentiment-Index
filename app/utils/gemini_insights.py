@@ -492,3 +492,322 @@ def get_compare_insights(cmp_data: dict, topic_a_name: str, topic_b_name: str) -
         print(f"[gemini_compare] Unexpected error: {e}")
 
     return EMPTY_COMPARE.copy()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# AI Narrative Report — journalist-style editorial summary
+# ──────────────────────────────────────────────────────────────────────────────
+
+NARRATIVE_PROMPT = """You are a data journalist writing a brief editorial analysis for a public sentiment platform.
+Your audience: general public, non-technical readers who want to understand what people think about "{topic}".
+
+DATA:
+- PSI Rating: {psi_rating} / 100 (where +100 = unanimously positive, -100 = unanimously negative)
+- Sentiment: {positive_pct}% positive, {negative_pct}% negative, {neutral_pct}% neutral
+- Total comments: {total_comments}
+- Date range: {date_range}
+- Dominant emotion: {dominant_emotion}
+- Sources: {source_split}
+
+WHAT PEOPLE LOVE (top phrases + real quotes from positive comments):
+{positive_keywords}
+
+WHAT PEOPLE CRITICISE (top phrases + real quotes from negative comments):
+{negative_keywords}
+
+INSTRUCTIONS:
+Write 3-4 paragraphs of flowing editorial prose about "{topic}" based strictly on this data.
+- Paragraph 1: Lead with the headline finding — what is the overall mood and why?
+- Paragraph 2: What are people most enthusiastic about? Ground it in the actual phrases and quotes.
+- Paragraph 3: What are the main criticisms or concerns? Quote real phrases.
+- Paragraph 4 (optional): Interesting nuance — platform differences, intensity, any surprising patterns.
+
+Rules:
+- Write as if publishing in a newsletter or blog. No bullet points. Flowing sentences.
+- Reference real phrases and quotes from the data to make it feel grounded.
+- Do NOT use "the data shows", "according to our analysis", or technical jargon.
+- Do NOT fabricate events or context not in the data.
+- Use **bold** sparingly for key phrases only.
+- Maximum 250 words total.
+- Return plain text/markdown only — no JSON, no code blocks.
+"""
+
+
+def get_narrative_report(
+    topic_name: str,
+    insights: dict,
+    psi_rating: float = 0,
+    source_split: dict = None,
+) -> str:
+    """
+    Generate a journalist-style 3-4 paragraph editorial about the topic.
+    Returns markdown string. Falls back to "" on any error.
+    """
+    from app.utils.gemini_sources import _make_gemini_client
+
+    client, model_id = _make_gemini_client()
+    if client is None:
+        return ""
+
+    takeaways = (insights or {}).get("takeaways") or {}
+    positive_pct  = takeaways.get("pos_pct", 0)
+    negative_pct  = takeaways.get("neg_pct", 0)
+    neutral_pct   = takeaways.get("neu_pct", 0)
+    total_comments = takeaways.get("total", 0)
+    dominant_emotion = takeaways.get("dominant_emotion", "mixed")
+
+    mom = (insights or {}).get("sentiment_momentum") or {}
+    mom_labels = mom.get("labels", [])
+    date_range = f"{mom_labels[0]} to {mom_labels[-1]}" if len(mom_labels) >= 2 else "recent period"
+
+    keyword_split = (insights or {}).get("keyword_split", {})
+    pos_kw = _build_keyword_context(keyword_split, "positive", max_items=5)
+    neg_kw = _build_keyword_context(keyword_split, "negative", max_items=5)
+
+    if source_split:
+        reddit_pct = round(source_split.get("reddit", 0) * 100)
+        yt_pct = round(source_split.get("youtube", 0) * 100)
+        split_str = f"{reddit_pct}% Reddit, {yt_pct}% YouTube"
+    else:
+        split_str = "Reddit + YouTube"
+
+    prompt = NARRATIVE_PROMPT.format(
+        topic=topic_name or "this topic",
+        psi_rating=round(psi_rating, 1),
+        positive_pct=round(positive_pct, 1),
+        negative_pct=round(negative_pct, 1),
+        neutral_pct=round(neutral_pct, 1),
+        total_comments=total_comments,
+        date_range=date_range,
+        dominant_emotion=dominant_emotion,
+        source_split=split_str,
+        positive_keywords=json.dumps(pos_kw, indent=2)[:1200],
+        negative_keywords=json.dumps(neg_kw, indent=2)[:1200],
+    )
+
+    try:
+        response = client.models.generate_content(model=model_id, contents=prompt)
+        return response.text.strip()
+    except Exception as e:
+        print(f"[gemini_narrative] Error: {e}")
+        return ""
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Opinion Clusters — audience segmentation
+# ──────────────────────────────────────────────────────────────────────────────
+
+CLUSTERS_PROMPT = """You are an audience analyst for a public sentiment platform.
+Analyze these {sample_size} comments about "{topic}" and identify 3-5 distinct opinion groups.
+
+COMMENTS (format: [SENTIMENT/SOURCE] comment text):
+{comments}
+
+INSTRUCTIONS:
+Identify 3-5 distinct groups of people by their attitude or opinion about "{topic}".
+Each cluster should represent a meaningfully different perspective — not just "positive" vs "negative" but specific sub-groups.
+
+For each cluster, provide:
+- label: 2-4 word descriptive name (e.g. "Nostalgic Fans", "Price Skeptics", "Casual Newcomers")
+- pct: estimated % of the audience this cluster represents (all pcts must sum to ~100)
+- summary: 1 sentence describing what this group thinks
+- quote: one short representative quote (15-30 words) from the actual comments above
+
+Return ONLY a valid JSON array. No markdown, no code blocks:
+[
+  {{"label": "...", "pct": 38, "summary": "...", "quote": "..."}},
+  {{"label": "...", "pct": 29, "summary": "...", "quote": "..."}},
+  ...
+]
+"""
+
+
+def get_opinion_clusters(topic_name: str, sampled_comments: list) -> list:
+    """
+    Identify 3-5 opinion clusters from a stratified comment sample.
+    Returns list of dicts: [{label, pct, summary, quote}, ...]
+    Falls back to [] on any error.
+    """
+    from app.utils.gemini_sources import _make_gemini_client
+
+    client, model_id = _make_gemini_client()
+    if client is None:
+        return []
+
+    if not sampled_comments:
+        return []
+
+    # Format comments for the prompt
+    lines = []
+    for c in sampled_comments[:120]:
+        text = (c.get("text") or "")[:180].replace("\n", " ")
+        sentiment = c.get("sentiment_label", "")
+        source = c.get("source_type", "")
+        lines.append(f"[{sentiment}/{source}] {text}")
+
+    prompt = CLUSTERS_PROMPT.format(
+        topic=topic_name or "this topic",
+        sample_size=len(lines),
+        comments="\n".join(lines)[:5000],
+    )
+
+    try:
+        response = client.models.generate_content(model=model_id, contents=prompt)
+        raw = response.text.strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        clusters = json.loads(raw.strip())
+        if isinstance(clusters, list):
+            # Validate structure
+            return [
+                {
+                    "label":   str(c.get("label", ""))[:50],
+                    "pct":     int(c.get("pct", 0)),
+                    "summary": str(c.get("summary", ""))[:200],
+                    "quote":   str(c.get("quote", ""))[:200],
+                }
+                for c in clusters if isinstance(c, dict)
+            ]
+    except Exception as e:
+        print(f"[gemini_clusters] Error: {e}")
+
+    return []
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# "Ask Anything" — conversational Q&A about a topic
+# ──────────────────────────────────────────────────────────────────────────────
+
+ASK_SYSTEM_PROMPT = """You are an expert analyst for a public sentiment intelligence platform.
+You have access to real comment data collected from Reddit and YouTube about "{topic}".
+
+DATASET CONTEXT:
+- Total comments: {total_comments}
+- Date range: {date_range}
+- Sentiment breakdown: {positive_pct}% positive, {negative_pct}% negative, {neutral_pct}% neutral
+- PSI Rating: {psi_rating} (scale -100 to +100, where +100 = overwhelmingly positive)
+- Dominant emotion: {dominant_emotion}
+- Source split: {source_split}
+
+WHAT PEOPLE LOVE (top phrases from positive comments, with real quotes):
+{positive_keywords}
+
+WHAT PEOPLE CRITICISE (top phrases from negative comments, with real quotes):
+{negative_keywords}
+
+TOP POSITIVE COMMENT (most upvoted):
+{top_positive_comment}
+
+TOP NEGATIVE COMMENT (most upvoted):
+{top_negative_comment}
+
+SAMPLED COMMENTS (representative mix of {sample_size} comments):
+{sampled_comments}
+
+INSTRUCTIONS:
+- Answer the user's question directly and concisely using the actual data above.
+- Ground every claim in the data — quote real comments when they add colour.
+- If the data doesn't support a definitive answer, say so honestly.
+- Speak conversationally, not like a report. 2-5 sentences unless a longer answer is clearly needed.
+- Never say "as an AI" or "based on the data provided to me". Just answer.
+- Format with markdown if it helps readability (bold, bullets).
+"""
+
+
+def ask_about_topic(
+    question: str,
+    topic_name: str,
+    insights: dict,
+    top_positive: list,
+    top_negative: list,
+    sampled_comments: list,
+    psi_rating: float = 0,
+    source_split: dict = None,
+) -> str:
+    """
+    Answer a free-form question about a topic using Gemini + real comment data.
+    Returns a markdown-formatted answer string, or an error message on failure.
+    """
+    from app.utils.gemini_sources import _make_gemini_client
+
+    client, model_id = _make_gemini_client()
+    if client is None:
+        return "Gemini is currently unavailable. Please try again later."
+
+    takeaways = (insights or {}).get("takeaways") or {}
+    positive_pct = takeaways.get("pos_pct", 0)
+    negative_pct = takeaways.get("neg_pct", 0)
+    neutral_pct  = takeaways.get("neu_pct", 0)
+    total_comments = takeaways.get("total", 0)
+    dominant_emotion = takeaways.get("dominant_emotion", "unknown")
+
+    mom = (insights or {}).get("sentiment_momentum") or {}
+    mom_labels = mom.get("labels", [])
+    date_range = f"{mom_labels[0]} to {mom_labels[-1]}" if len(mom_labels) >= 2 else "recent period"
+
+    # Build keyword context
+    keyword_split = (insights or {}).get("keyword_split", {})
+    pos_kw = _build_keyword_context(keyword_split, "positive", max_items=6)
+    neg_kw = _build_keyword_context(keyword_split, "negative", max_items=6)
+
+    # Format top comments
+    def _fmt_comment(c):
+        if not c:
+            return "N/A"
+        text = (c.get("text") or "")[:300]
+        score = c.get("score", 0)
+        source = c.get("source_type", "")
+        return f'"{text}" (score: {score}, source: {source})'
+
+    top_pos_str = _fmt_comment(top_positive[0] if top_positive else None)
+    top_neg_str = _fmt_comment(top_negative[0] if top_negative else None)
+
+    # Format sampled comments (keep short)
+    sample_lines = []
+    for c in sampled_comments[:80]:
+        text = (c.get("text") or "")[:200].replace("\n", " ")
+        sentiment = c.get("sentiment_label", "")
+        source = c.get("source_type", "")
+        sample_lines.append(f"[{sentiment}/{source}] {text}")
+    sampled_str = "\n".join(sample_lines) if sample_lines else "No comments available."
+
+    # Source split summary
+    if source_split:
+        reddit_pct = round(source_split.get("reddit", 0) * 100)
+        yt_pct = round(source_split.get("youtube", 0) * 100)
+        split_str = f"{reddit_pct}% Reddit, {yt_pct}% YouTube"
+    else:
+        split_str = "Reddit + YouTube"
+
+    system = ASK_SYSTEM_PROMPT.format(
+        topic=topic_name or "this topic",
+        total_comments=total_comments,
+        date_range=date_range,
+        positive_pct=round(positive_pct, 1),
+        negative_pct=round(negative_pct, 1),
+        neutral_pct=round(neutral_pct, 1),
+        psi_rating=round(psi_rating, 1),
+        dominant_emotion=dominant_emotion,
+        source_split=split_str,
+        positive_keywords=json.dumps(pos_kw, indent=2)[:1500],
+        negative_keywords=json.dumps(neg_kw, indent=2)[:1500],
+        top_positive_comment=top_pos_str,
+        top_negative_comment=top_neg_str,
+        sample_size=len(sample_lines),
+        sampled_comments=sampled_str[:4000],
+    )
+
+    full_prompt = f"{system}\n\nUSER QUESTION: {question}"
+
+    try:
+        response = client.models.generate_content(
+            model=model_id,
+            contents=full_prompt,
+        )
+        return response.text.strip()
+    except Exception as e:
+        err_str = str(e)
+        if "429" in err_str or "quota" in err_str.lower():
+            return "Daily request limit reached. Please try again tomorrow."
+        print(f"[gemini_ask] Error: {e}")
+        return "Something went wrong. Please try again."

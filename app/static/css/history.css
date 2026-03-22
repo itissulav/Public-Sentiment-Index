@@ -1,13 +1,5 @@
 /* app/static/css/history.css */
 
-:root {
-  --accent-cyan:   #5eb8d0;
-  --accent-blue:   #5a9fd4;
-  --accent-green:  var(--positive);
-  --accent-red:    var(--negative);
-  --accent-yellow: #c4984a;
-}
-
 /* ============================================================
    PAGE CONTAINER
    ============================================================ */
@@ -33,47 +25,45 @@
 
 .back-link {
   font-size: 0.85rem;
-  color: var(--text-muted);
+  color: var(--text-2);
   text-decoration: none;
   display: inline-block;
   margin-bottom: 14px;
   transition: color 0.2s;
 }
 
-.back-link:hover { color: var(--accent-cyan); }
+.back-link:hover { color: var(--accent); }
 
 .history-header h1 {
   font-size: 2.4rem;
   font-weight: 800;
   margin: 0 0 10px;
-  background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--text);
 }
 
 .history-header p {
-  color: var(--text-muted);
+  color: var(--text-2);
   font-size: 1rem;
   margin: 0;
 }
 
 .btn-new-scan {
-  padding: 13px 28px;
-  border-radius: 30px;
-  background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+  padding: 12px 26px;
+  border-radius: 6px;
+  background: var(--accent);
   color: #fff;
   text-decoration: none;
-  font-weight: 600;
-  font-size: 0.95rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   white-space: nowrap;
   flex-shrink: 0;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 20px rgba(0, 242, 254, 0.2);
+  transition: background 0.15s ease;
 }
 
 .btn-new-scan:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(0, 242, 254, 0.4);
+  background: #e03a0e;
 }
 
 /* ============================================================
@@ -82,27 +72,24 @@
 .scan-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 28px;
+  gap: 2px;
+  border: 1px solid var(--border);
 }
 
 /* ============================================================
    SCAN CARD
    ============================================================ */
 .scan-card {
-  background: var(--bg-card);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 20px;
+  background: var(--surface);
+  border: none;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  transition: background 0.2s;
 }
 
 .scan-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 242, 254, 0.1);
-  border-color: rgba(0, 242, 254, 0.2);
+  background: var(--surface-2);
 }
 
 /* Banner */
@@ -111,14 +98,14 @@
   height: 160px;
   background-size: cover;
   background-position: center;
-  background-color: rgba(15, 23, 42, 1);
+  background-color: var(--surface-3);
   flex-shrink: 0;
 }
 
 .scan-card-banner-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, rgba(11, 15, 25, 0.98) 0%, rgba(11, 15, 25, 0.4) 100%);
+  background: linear-gradient(to top, rgba(6, 6, 7, 0.98) 0%, rgba(6, 6, 7, 0.35) 100%);
 }
 
 .scan-card-banner-content {
@@ -133,28 +120,28 @@
 }
 
 .scan-topic-name {
-  font-size: 1.35rem;
+  font-family: 'Syne', sans-serif;
+  font-size: 1.3rem;
   font-weight: 800;
   color: #fff;
   margin: 0;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
   line-height: 1.2;
 }
 
-/* Sentiment pill (reuse from trends) */
+/* Sentiment pill */
 .sentiment-pill {
   align-self: flex-start;
-  padding: 3px 11px;
-  border-radius: 20px;
+  padding: 3px 10px;
+  border-radius: 3px;
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 1.5px;
   text-transform: uppercase;
 }
 
-.sentiment-pill.positive { background: rgba(16,185,129,0.15); color: var(--accent-green); border: 1px solid rgba(16,185,129,0.4); }
-.sentiment-pill.negative { background: rgba(239,68,68,0.15);  color: var(--accent-red);   border: 1px solid rgba(239,68,68,0.4);  }
-.sentiment-pill.neutral  { background: rgba(79,172,254,0.15); color: var(--accent-blue);  border: 1px solid rgba(79,172,254,0.4); }
+.sentiment-pill.positive { background: rgba(62,201,123,0.2);  color: var(--positive);      border: 1px solid rgba(62,201,123,0.3); }
+.sentiment-pill.negative { background: rgba(228,75,75,0.2);   color: var(--negative);      border: 1px solid rgba(228,75,75,0.3);  }
+.sentiment-pill.neutral  { background: rgba(138,133,160,0.12); color: var(--neutral-color); border: 1px solid rgba(138,133,160,0.3); }
 
 /* Card Body */
 .scan-card-body {
@@ -163,6 +150,7 @@
   flex-direction: column;
   gap: 16px;
   flex-grow: 1;
+  border-top: 1px solid var(--border);
 }
 
 /* Stats Row */
@@ -183,25 +171,25 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.8px;
-  color: var(--text-muted);
+  color: var(--text-2);
 }
 
 .scan-stat-value {
   font-size: 1rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--text);
 }
 
-.scan-stat-value.positive { color: var(--accent-green); }
-.scan-stat-value.negative { color: var(--accent-red);   }
-.scan-stat-value.neutral  { color: var(--accent-blue);  }
-.scan-stat-value.date     { font-size: 0.85rem; color: var(--text-muted); font-weight: 500; }
+.scan-stat-value.positive { color: var(--positive); }
+.scan-stat-value.negative { color: var(--negative); }
+.scan-stat-value.neutral  { color: var(--neutral-color); }
+.scan-stat-value.date     { font-size: 0.85rem; color: var(--text-2); font-weight: 500; }
 
 /* Rating bar */
 .scan-rating-track {
   position: relative;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.07);
+  height: 5px;
+  background: var(--border);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -209,8 +197,8 @@
 .scan-rating-center {
   position: absolute;
   left: 50%; top: 0; bottom: 0;
-  width: 2px;
-  background: rgba(255, 255, 255, 0.2);
+  width: 1px;
+  background: var(--border-2);
   transform: translateX(-50%);
 }
 
@@ -220,66 +208,63 @@
   border-radius: 6px;
 }
 
-.scan-rating-fill.positive { background: linear-gradient(90deg, rgba(16,185,129,0.5), rgba(16,185,129,1)); }
-.scan-rating-fill.negative { background: linear-gradient(90deg, rgba(239,68,68,1), rgba(239,68,68,0.5)); }
+.scan-rating-fill.positive { background: linear-gradient(90deg, rgba(62,201,123,0.5), rgba(62,201,123,1)); }
+.scan-rating-fill.negative { background: linear-gradient(90deg, rgba(228,75,75,1), rgba(228,75,75,0.5)); }
 
 .scan-rating-axis {
   display: flex;
   justify-content: space-between;
   font-size: 0.62rem;
-  color: var(--text-muted);
-  opacity: 0.6;
+  color: var(--text-3);
   margin-top: 3px;
 }
 
 /* Action Buttons */
 .scan-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   margin-top: auto;
 }
 
 .btn-view,
 .btn-reanalyse {
   width: 100%;
-  padding: 11px 0;
-  border-radius: 10px;
-  font-size: 0.875rem;
-  font-weight: 600;
+  padding: 10px 0;
+  border-radius: 4px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   cursor: pointer;
   border: none;
-  transition: all 0.2s ease;
-  font-family: inherit;
+  transition: all 0.15s ease;
+  font-family: 'DM Sans', sans-serif;
 }
 
 .btn-view {
-  background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+  background: var(--accent);
   color: #fff;
-  box-shadow: 0 4px 14px rgba(0, 242, 254, 0.2);
 }
 
 .btn-view:hover {
-  box-shadow: 0 6px 20px rgba(0, 242, 254, 0.4);
-  transform: translateY(-1px);
+  background: #e03a0e;
 }
 
 .btn-reanalyse {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-muted);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: var(--text-2);
+  border: 1px solid var(--border);
 }
 
 .btn-reanalyse:hover {
-  background: rgba(255, 255, 255, 0.09);
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--text);
+  border-color: var(--border-2);
 }
 
 .btn-view:disabled,
 .btn-reanalyse:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
-  transform: none;
 }
 
 /* ============================================================
@@ -302,12 +287,12 @@
 .history-empty h2 {
   font-size: 1.6rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--text);
   margin: 0;
 }
 
 .history-empty p {
-  color: var(--text-muted);
+  color: var(--text-2);
   font-size: 1rem;
   margin: 0;
   max-width: 420px;
@@ -317,7 +302,7 @@
    RESPONSIVE
    ============================================================ */
 @media (max-width: 768px) {
-  .scan-grid { grid-template-columns: 1fr; }
+  .scan-grid { grid-template-columns: 1fr; gap: 0; }
   .history-header { flex-direction: column; align-items: flex-start; }
   .history-header h1 { font-size: 1.8rem; }
 }

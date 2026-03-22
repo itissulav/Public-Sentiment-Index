@@ -1,0 +1,300 @@
+/* ============================================================
+   PULSE DASHBOARD
+   ============================================================ */
+
+/* ── Hero ──────────────────────────────────────────────────── */
+.pulse-hero {
+  border-bottom: 1px solid var(--border);
+  padding: 60px 5% 40px;
+  position: relative;
+  overflow: hidden;
+}
+
+.pulse-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 60% 80% at 10% 50%, rgba(255,94,58,0.07) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.pulse-hero-inner { position: relative; z-index: 1; }
+
+.pulse-eyebrow {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  display: block;
+  margin-bottom: 12px;
+}
+
+.pulse-title {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  font-weight: 900;
+  color: var(--text);
+  margin: 0 0 10px;
+  line-height: 1.05;
+}
+
+.pulse-sub {
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin: 0 0 28px;
+}
+
+.pulse-period-row {
+  display: flex;
+  gap: 2px;
+}
+
+.pulse-period-btn {
+  padding: 7px 20px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.pulse-period-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.pulse-period-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* ── Shift Detection Banner ────────────────────────────────── */
+.shift-banner {
+  padding: 14px 5%;
+  background: rgba(255, 94, 58, 0.06);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.shift-eyebrow {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--accent);
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+
+.shift-item {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 7px 14px;
+}
+
+.shift-item.shift-up   .shift-delta { color: #10b981; }
+.shift-item.shift-down .shift-delta { color: #ef4444; }
+
+.shift-name  { font-size: 0.78rem; font-weight: 600; color: var(--text); }
+.shift-delta { font-size: 0.82rem; font-weight: 700; }
+.shift-psi   { font-size: 0.7rem; color: var(--muted); }
+
+/* ── Market Movers ─────────────────────────────────────────── */
+.pulse-movers {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mover-card {
+  padding: 24px 28px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mover-card:last-child { border-right: none; }
+
+.mover-name {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+
+.mover-psi {
+  font-family: 'Syne', sans-serif;
+  font-size: 2.4rem;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--text);
+}
+
+.mover-delta {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.mover-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+.mover-up   .mover-psi,  .mover-up   .mover-delta { color: #10b981; }
+.mover-down .mover-psi,  .mover-down .mover-delta { color: #ef4444; }
+.mover-flat .mover-psi,  .mover-flat .mover-delta { color: var(--muted); }
+
+.mover-up   .mover-label { color: #10b981; }
+.mover-down .mover-label { color: #ef4444; }
+.mover-flat .mover-label { color: var(--muted); }
+
+/* ── Chart section ─────────────────────────────────────────── */
+.pulse-chart-section {
+  padding: 32px 5% 28px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pulse-chart-header {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.pulse-chart-label {
+  font-family: 'Syne', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.pulse-chart-sub {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.pulse-chart-wrap {
+  height: 320px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 20px;
+}
+
+/* ── Legend ────────────────────────────────────────────────── */
+.pulse-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.pulse-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.pulse-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Emotion Heatmap ───────────────────────────────────────── */
+.pulse-heatmap-section {
+  padding: 32px 5% 48px;
+}
+
+.pulse-heatmap-header {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.hm-legend-pos { color: #10b981; }
+.hm-legend-neg { color: #ef4444; }
+.hm-legend-neu { color: #94a3b8; }
+
+.pulse-heatmap { overflow-x: auto; }
+
+.hm-grid {
+  display: grid;
+  grid-template-columns: 160px repeat(calc(var(--hm-cols) - 1), 14px);
+  gap: 2px;
+  min-width: max-content;
+}
+
+.hm-cell {
+  height: 22px;
+  font-size: 0.6rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+}
+
+.hm-corner { /* empty */ }
+
+.hm-date-label {
+  justify-content: center;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 0.55rem;
+  color: rgba(245,240,232,0.3);
+  writing-mode: vertical-lr;
+  transform: rotate(180deg);
+  height: 42px;
+}
+
+.hm-topic-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding-right: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hm-data {
+  border-radius: 2px;
+  cursor: default;
+  transition: opacity 0.1s;
+}
+
+.hm-data:hover { opacity: 0.7; }
+
+/* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .pulse-movers { grid-template-columns: 1fr; }
+  .mover-card { border-right: none; border-bottom: 1px solid var(--border); }
+  .mover-card:last-child { border-bottom: none; }
+  .pulse-chart-wrap { height: 240px; }
+}

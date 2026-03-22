@@ -1,0 +1,56 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main]
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: us-central1
+  SERVICE: psi-app
+  IMAGE: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/psi-repo/psi-app
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build image
+        run: docker build -t $IMAGE .
+
+      - name: Push image
+        run: docker push $IMAGE
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy $SERVICE \
+            --image $IMAGE \
+            --region $REGION \
+            --platform managed \
+            --allow-unauthenticated \
+            --memory 512Mi \
+            --set-env-vars "\
+          SUPABASE_URL=${{ secrets.SUPABASE_URL }},\
+          SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }},\
+          SUPABASE_SERVICE_KEY=${{ secrets.SUPABASE_SERVICE_KEY }},\
+          HUGGINGFACE_API_KEY=${{ secrets.HUGGINGFACE_API_KEY }},\
+          CLIENT_ID=${{ secrets.CLIENT_ID }},\
+          CLIENT_SECRET=${{ secrets.CLIENT_SECRET }},\
+          USER_AGENT=${{ secrets.USER_AGENT }},\
+          YOUTUBE_API_KEY=${{ secrets.YOUTUBE_API_KEY }},\
+          GOOGLE_CLOUD_PROJECT=${{ secrets.GCP_PROJECT_ID }},\
+          GOOGLE_CLOUD_LOCATION=us-central1,\
+          RESEND_API_KEY=${{ secrets.RESEND_API_KEY }},\
+          SECRET_KEY=${{ secrets.SECRET_KEY }},\
+          APP_BASE_URL=${{ secrets.APP_BASE_URL }}"

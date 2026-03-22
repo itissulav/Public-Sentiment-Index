@@ -143,6 +143,28 @@ def trends():
     current_topic_id = None   # Passed to template for the deep-dive AJAX endpoint
     topic_cover_url  = None   # Wikipedia image URL for custom (non-predefined) topics
 
+    # Build search autocomplete suggestions: predefined + user history
+    _TRENDS_IMG = {
+        "Donald Trump":      "donaldtrump.png",
+        "The Boys":          "theboys.png",
+        "Avengers Doomsday": "avengersdoomsday.png",
+        "Macbook Neo":       "macbookneo.png",
+        "America vs Iran":   "americavsiran.png",
+    }
+    suggestions = [{'name': t, 'kind': 'featured', 'img': _TRENDS_IMG.get(t, '')} for t in PREDEFINED_TOPICS]
+    if user:
+        try:
+            _hist = admin_supabase.table("topics").select("name") \
+                                  .eq("user_id", current_user_id) \
+                                  .order("created_at", desc=True).execute()
+            if _hist.data:
+                _existing = {s['name'] for s in suggestions}
+                for row in _hist.data:
+                    if row['name'] not in _existing:
+                        suggestions.append({'name': row['name'], 'kind': 'saved', 'img': ''})
+        except Exception:
+            pass
+
     if request.method == "POST":
         topic_query    = request.form.get("topic")
         topic_id_param = request.form.get("topic_id")   # set by View Analysis on history page
@@ -422,10 +444,104 @@ def trends():
         has_data=has_data,
         topic_id_for_deep_dive=current_topic_id,
         topic_cover_url=topic_cover_url,
+        suggestions=suggestions,
     )
 
 
 PREDEFINED_TOPICS = ["Donald Trump", "The Boys", "Avengers Doomsday", "Macbook Neo", "America vs Iran"]
+
+
+@main_bp.route("/pulse")
+def pulse():
+    """Pulse dashboard — multi-topic PSI timeline over the last 90 days."""
+    import threading
+    from datetime import date, timedelta
+
+    user_data = session.get("user")
+    user = User.from_dict(user_data) if user_data else None
+
+    cutoff = (date.today() - timedelta(days=90)).isoformat()
+
+    # Fetch predefined topics
+    topics_res = admin_supabase.table("topics").select("id,name,category").is_("user_id", "null").execute()
+    topics = topics_res.data or []
+    topic_ids = [t["id"] for t in topics]
+
+    pulse_data = {}
+    movers = []
+
+    if topic_ids:
+        snaps_res = admin_supabase.table("daily_snapshots") \
+            .select("topic_id,snapshot_date,psi_rating,dominant_emotion,total_comments") \
+            .in_("topic_id", topic_ids) \
+            .gte("snapshot_date", cutoff) \
+            .order("snapshot_date") \
+            .execute()
+        snaps = snaps_res.data or []
+
+        # Build lookup: topic_id → name
+        id_to_name = {t["id"]: t["name"] for t in topics}
+
+        # Group snapshots by topic
+        by_topic = {}
+        for s in snaps:
+            tid = s["topic_id"]
+            if tid not in by_topic:
+                by_topic[tid] = []
+            by_topic[tid].append(s)
+
+        for tid, rows in by_topic.items():
+            name = id_to_name.get(tid, str(tid))
+            dates   = [r["snapshot_date"] for r in rows]
+            psi     = [round(r["psi_rating"] or 0, 1) for r in rows]
+            emotions = [r.get("dominant_emotion") or "neutral" for r in rows]
+            pulse_data[name] = {"dates": dates, "psi": psi, "emotions": emotions}
+
+            # Mover: latest vs 7 days ago
+            if len(psi) >= 2:
+                latest = psi[-1]
+                week_ago_idx = max(0, len(psi) - 8)
+                week_ago = psi[week_ago_idx]
+                delta = round(latest - week_ago, 1)
+                movers.append({
+                    "name": name,
+                    "latest_psi": latest,
+                    "delta": delta,
+                    "direction": "up" if delta > 0 else "down" if delta < 0 else "flat",
+                })
+
+        movers.sort(key=lambda m: abs(m["delta"]), reverse=True)
+        movers = movers[:3]
+
+        # Shift detection: topics with >15 PSI points overnight
+        SHIFT_THRESHOLD = 10
+        shifts = []
+        for name, t in pulse_data.items():
+            psi = t["psi"]
+            dates = t["dates"]
+            if len(psi) < 2:
+                continue
+            day_delta = psi[-1] - psi[-2]
+            if abs(day_delta) >= SHIFT_THRESHOLD:
+                shifts.append({
+                    "name": name,
+                    "delta": round(day_delta, 1),
+                    "direction": "up" if day_delta > 0 else "down",
+                    "date": dates[-1],
+                    "latest_psi": round(psi[-1], 1),
+                })
+        shifts.sort(key=lambda x: abs(x["delta"]), reverse=True)
+    else:
+        shifts = []
+
+    return render_template(
+        "pulse.html",
+        user=user,
+        pulse_data=json.dumps(pulse_data),
+        movers=movers,
+        shifts=shifts,
+        topics=topics,
+    )
 
 
 @main_bp.route("/trends/deep-dive", methods=["POST"])
@@ -491,10 +607,21 @@ def trends_deep_dive():
     charts_reddit  = _dd_charts(df_reddit)
     charts_youtube = _dd_charts(df_youtube, label_source="youtube")
 
+    # Compute all-sources insights once (reused by Gemini calls below)
+    ins_all = compute_all_insights(df_all)
+
+    # Source split ratio (for narrative)
+    source_split = None
+    if "source_type" in df_all.columns:
+        counts = df_all["source_type"].value_counts(normalize=True).to_dict()
+        source_split = {k: round(v, 3) for k, v in counts.items()}
+
+    psi_rating = float(request.form.get("psi_rating", 0) or 0)
+
     # Gemini: separate call per source so each tab gets unique AI insights
     gemini_all = gemini_reddit = gemini_youtube = {}
     try:
-        gemini_all = get_deep_dive_insights(topic_name, compute_all_insights(df_all), charts_all)
+        gemini_all = get_deep_dive_insights(topic_name, ins_all, charts_all)
     except Exception as e:
         print(f"[deep-dive] Gemini all error: {e}")
     try:
@@ -508,6 +635,31 @@ def trends_deep_dive():
     except Exception as e:
         print(f"[deep-dive] Gemini youtube error: {e}")
 
+    # Narrative report (all-sources)
+    narrative = ""
+    try:
+        from app.utils.gemini_insights import get_narrative_report
+        narrative = get_narrative_report(topic_name, ins_all, psi_rating, source_split)
+    except Exception as e:
+        print(f"[deep-dive] Narrative error: {e}")
+
+    # Opinion clusters (all-sources)
+    clusters = []
+    try:
+        import random as _random
+        from app.utils.gemini_insights import get_opinion_clusters
+        pos_rows = [r for r in all_rows if r.get("sentiment_label") == "Positive"]
+        neg_rows = [r for r in all_rows if r.get("sentiment_label") == "Negative"]
+        neu_rows = [r for r in all_rows if r.get("sentiment_label") == "Neutral"]
+        cluster_sample = (
+            _random.sample(pos_rows, min(50, len(pos_rows))) +
+            _random.sample(neg_rows, min(50, len(neg_rows))) +
+            _random.sample(neu_rows, min(50, len(neu_rows)))
+        )
+        clusters = get_opinion_clusters(topic_name, cluster_sample)
+    except Exception as e:
+        print(f"[deep-dive] Clusters error: {e}")
+
     return {
         "charts_all":     charts_all,
         "charts_reddit":  charts_reddit,
@@ -516,7 +668,89 @@ def trends_deep_dive():
         "gemini_all":     gemini_all,
         "gemini_reddit":  gemini_reddit,
         "gemini_youtube": gemini_youtube,
+        "narrative":      narrative,
+        "clusters":       clusters,
     }
+
+
+@main_bp.route("/trends/ask", methods=["POST"])
+def trends_ask():
+    """AJAX endpoint — answer a free-form question about a topic using Gemini + real comment data."""
+    import pandas as _pd
+    import random
+    from app.utils.insights import compute_all_insights
+    from app.utils.gemini_insights import ask_about_topic
+
+    topic_id   = request.form.get("topic_id", "")
+    topic_name = request.form.get("topic_name", "")
+    question   = (request.form.get("question") or "").strip()
+    psi_rating = float(request.form.get("psi_rating", 0) or 0)
+
+    if not topic_id or not question:
+        return {"error": "missing topic_id or question"}, 400
+
+    if len(question) > 500:
+        return {"error": "Question too long (max 500 characters)"}, 400
+
+    PAGE = 1000
+    all_rows = topic_cache.get(topic_id)
+    if all_rows is None:
+        all_rows, offset = [], 0
+        while True:
+            q = admin_supabase.table("comments").select(_COMMENT_COLS).eq("topic_id", topic_id)
+            page = q.order("id").range(offset, offset + PAGE - 1).execute()
+            if not page.data:
+                break
+            all_rows.extend(_flatten_comment_row(r) for r in page.data)
+            if len(page.data) < PAGE:
+                break
+            offset += PAGE
+        topic_cache.set(topic_id, all_rows)
+
+    if not all_rows:
+        return {"error": "no data"}, 404
+
+    df_all = _pd.DataFrame(all_rows)
+    insights = compute_all_insights(df_all)
+
+    # Build top positive/negative comment lists (as dicts)
+    top_pos = sorted(
+        [r for r in all_rows if r.get("sentiment_label") == "Positive"],
+        key=lambda r: r.get("score", 0) or 0, reverse=True
+    )[:3]
+    top_neg = sorted(
+        [r for r in all_rows if r.get("sentiment_label") == "Negative"],
+        key=lambda r: r.get("score", 0) or 0, reverse=True
+    )[:3]
+
+    # Stratified sample: 30 pos, 30 neg, 20 neutral
+    def _sample(rows, label, n):
+        subset = [r for r in rows if r.get("sentiment_label") == label]
+        return random.sample(subset, min(n, len(subset)))
+
+    sampled = _sample(all_rows, "Positive", 30) + \
+              _sample(all_rows, "Negative", 30) + \
+              _sample(all_rows, "Neutral", 20)
+    random.shuffle(sampled)
+
+    # Source split ratio
+    source_split = None
+    if "source_type" in df_all.columns:
+        counts = df_all["source_type"].value_counts(normalize=True).to_dict()
+        source_split = {k: round(v, 3) for k, v in counts.items()}
+
+    answer = ask_about_topic(
+        question=question,
+        topic_name=topic_name,
+        insights=insights,
+        top_positive=top_pos,
+        top_negative=top_neg,
+        sampled_comments=sampled,
+        psi_rating=psi_rating,
+        source_split=source_split,
+    )
+
+    return {"answer": answer}
 
 
 @main_bp.route("/compare", methods=["GET", "POST"])
@@ -526,7 +760,14 @@ def compare():
     current_user_id = user.get_user_id() if user else None
 
     # Build autocomplete suggestions: predefined + user history
-    suggestions = [{'name': t, 'kind': 'featured'} for t in PREDEFINED_TOPICS]
+    _FEATURED_IMG = {
+        "Donald Trump":      "donaldtrump.png",
+        "The Boys":          "theboys.png",
+        "Avengers Doomsday": "avengersdoomsday.png",
+        "Macbook Neo":       "macbookneo.png",
+        "America vs Iran":   "americavsiran.png",
+    }
+    suggestions = [{'name': t, 'kind': 'featured', 'img': _FEATURED_IMG.get(t, '')} for t in PREDEFINED_TOPICS]
     if user:
         try:
             res = admin_supabase.table("topics") \
