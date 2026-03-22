@@ -14,4 +14,4 @@ COPY . .
 ENV PYTHONUNBUFFERED=1
 
 # Cloud Run injects $PORT; gunicorn binds to it
-CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 120 app:app
+CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 120 wsgi:app
