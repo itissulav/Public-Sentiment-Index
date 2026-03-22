@@ -71,9 +71,15 @@ def classify_api(texts: list[str], batch_size: int = 25) -> list[dict]:
 
     headers = {"Authorization": f"Bearer {hf_key}"}
     results = []
+    auth_failed = False
 
     for i in range(0, len(texts), batch_size):
         batch = [str(t)[:512] if t else "" for t in texts[i:i + batch_size]]
+
+        if auth_failed:
+            results.extend([_neutral_result() for _ in batch])
+            continue
+
         success = False
 
         for attempt in range(4):
@@ -106,6 +112,9 @@ def classify_api(texts: list[str], batch_size: int = 25) -> list[dict]:
                     print(f"[emotion] HF rate limited (attempt {attempt+1}/4) — sleeping 30s")
                     time.sleep(30)
                 else:
+                    if resp.status_code == 401:
+                        print("[emotion] HF auth failed (401) — check HUGGINGFACE_API_KEY secret")
+                        auth_failed = True
                     print(f"[emotion] HF error {resp.status_code}: {resp.text[:200]}")
                     break
             except requests.exceptions.Timeout:
