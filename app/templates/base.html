@@ -133,10 +133,14 @@
     <main class="content-wrapper">{% block content %}{% endblock %}</main>
 
     <!-- Scan progress pill -->
+    <form id="scanPillForm" method="POST" action="/trends" style="display:none">
+      <input type="hidden" id="scanPillTopic" name="topic" value="">
+    </form>
     <div id="scanPill" style="display:none">
       <span class="scan-pill-dot"></span>
       <span id="scanPillText">Analysing…</span>
-      <a id="scanPillLink" href="/trends" class="scan-pill-link">View →</a>
+      <button type="button" class="scan-pill-link"
+        onclick="document.getElementById('scanPillTopic').value=sessionStorage.getItem('activeScan')||'';document.getElementById('scanPillForm').submit()">View →</button>
     </div>
 
     <!-- Lucide icons runtime -->
