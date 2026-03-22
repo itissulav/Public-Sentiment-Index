@@ -2083,7 +2083,7 @@ document.addEventListener('DOMContentLoaded', function () {
     searchForm.addEventListener('submit', function () {
       startLoadingUI(true);
       // Store topic in sessionStorage so scan pill can track it on other pages
-      const topicVal = document.getElementById('topicInput')?.value?.trim();
+      const topicVal = document.getElementById('trendsSearchInput')?.value?.trim();
       if (topicVal) sessionStorage.setItem('activeScan', topicVal);
       const btn    = document.getElementById('analyzeBtn');
       const loader = document.getElementById('loadingIndicator');
