@@ -6,6 +6,94 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/trends.css') }}" />
 {% endblock %}
 
+{% macro takeaways_panel(tw) %}
+{% if tw %}
+<div class="takeaways-panel">
+  <p class="takeaways-title">Key Takeaways</p>
+  <div class="takeaways-grid">
+    <div class="takeaway-stat">
+      <div class="takeaway-stat-label">Positive Sentiment</div>
+      <div class="takeaway-stat-value pos">{{ tw.pos_pct }}%</div>
+    </div>
+    <div class="takeaway-stat">
+      <div class="takeaway-stat-label">Negative Sentiment</div>
+      <div class="takeaway-stat-value neg">{{ tw.neg_pct }}%</div>
+    </div>
+    {% if tw.top_praised %}
+    <div class="takeaway-stat">
+      <div class="takeaway-stat-label">Most Praised</div>
+      <div class="takeaway-text-val pos-text">"{{ tw.top_praised }}"</div>
+    </div>
+    {% endif %}
+    {% if tw.top_criticised %}
+    <div class="takeaway-stat">
+      <div class="takeaway-stat-label">Most Criticised</div>
+      <div class="takeaway-text-val neg-text">"{{ tw.top_criticised }}"</div>
+    </div>
+    {% endif %}
+    <div class="takeaway-stat">
+      <div class="takeaway-stat-label">Community Division</div>
+      <div class="division-track"><div class="division-fill" style="width:{{ tw.division_score }}%;"></div></div>
+      <div class="division-label"><span>Consensus</span><span>{{ tw.division_score }}%</span><span>Divided</span></div>
+    </div>
+  </div>
+  {% if tw.most_debated %}
+  <div class="takeaway-debate-row">
+    <span class="takeaway-debate-label">Most Debated Post</span>
+    <span class="takeaway-debate-title">"{{ tw.most_debated }}"</span>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro community_voices(pos, neg) %}
+{% if pos or neg %}
+<div class="reddit-voices full">
+  {% if pos %}
+  <div class="reddit-voice-group">
+    <p class="voice-label positive-label">Most Viral Support</p>
+    <div class="reddit-card">
+      <div class="reddit-votes"><span class="r-up">▲</span><span class="r-score">{{ pos.score }}</span><span class="r-down">▼</span></div>
+      <div class="r-content">
+        <div class="r-meta">
+          {% if pos.source_type == 'youtube' %}<span class="platform-badge yt-badge">YouTube</span>{% else %}<span class="platform-badge reddit-badge">r/{{ pos.source_id }}</span>{% endif %}
+          by <span class="r-author">{{ pos.author }}</span>
+          <span class="r-badge positive">Positive</span>
+        </div>
+        <div class="r-text">{{ pos.text }}</div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% if neg %}
+  <div class="reddit-voice-group">
+    <p class="voice-label negative-label">Most Viral Criticism</p>
+    <div class="reddit-card">
+      <div class="reddit-votes"><span class="r-up">▲</span><span class="r-score">{{ neg.score }}</span><span class="r-down">▼</span></div>
+      <div class="r-content">
+        <div class="r-meta">
+          {% if neg.source_type == 'youtube' %}<span class="platform-badge yt-badge">YouTube</span>{% else %}<span class="platform-badge reddit-badge">r/{{ neg.source_id }}</span>{% endif %}
+          by <span class="r-author">{{ neg.author }}</span>
+          <span class="r-badge negative">Negative</span>
+        </div>
+        <div class="r-text">{{ neg.text }}</div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro deep_dive_card(size, question, gemini_desc, canvas_id) %}
+<div class="chart-card {{ size }} deep-dive-card">
+  <div class="chart-question">{{ question }}</div>
+  <p class="chart-gemini-desc" data-canvas="{{ canvas_id }}"{% if not gemini_desc %} style="display:none"{% endif %}>{{ gemini_desc or '' }}</p>
+  <div class="chart-body{% if size == 'full' or size == 'two-thirds' %} tall{% endif %}"><canvas id="{{ canvas_id }}"></canvas></div>
+</div>
+{% endmacro %}
+
 {% block content %}
 
 <!-- ============================================================
@@ -19,19 +107,16 @@
     <form method="POST" action="{{ url_for('main.trends') }}" class="topic-search-form" id="searchForm">
       <input type="text" name="topic" placeholder="Search any topic (e.g. Bitcoin, Taylor Swift, Gaza…)" required class="search-input"
              value="{{ current_topic if current_topic else '' }}">
-      <button type="submit" class="search-btn" id="analyzeBtn">Analyze</button>
+<button type="submit" class="search-btn" id="analyzeBtn">Analyze</button>
       <a href="{{ url_for('main.compare') }}" class="compare-link-btn">Compare Topics</a>
     </form>
-    <div id="loadingIndicator" style="display:none; width:100%; max-width:600px; margin-top:15px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-        <div id="progressText" style="color:var(--accent-cyan); font-weight:500; font-size:0.95rem; text-shadow:0 0 10px rgba(0,242,254,0.5);">
-          <span class="spinner" style="width:14px; height:14px; border-width:2px;"></span> Initializing analysis...
-        </div>
-        <div id="progressPercent" style="color:var(--text-muted); font-size:0.85rem; font-weight:600;">0%</div>
+    <!-- Full-screen analysis loading overlay (replaces inline progress bar) -->
+    <div id="loadingIndicator" style="display:none;position:fixed;inset:0;background:rgba(6,6,7,0.94);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:22px;">
+      <p id="progressText" style="color:#f5f0e8;font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:600;letter-spacing:0.03em;margin:0;text-align:center;max-width:340px;line-height:1.5;">Initializing analysis…</p>
+      <div style="width:320px;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;">
+        <div id="progressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#FF4B1F,#FFB347);border-radius:2px;transition:width 0.4s ease;"></div>
       </div>
-      <div style="width:100%; height:6px; background:rgba(15,23,42,0.8); border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.05);">
-        <div id="progressBar" style="width:0%; height:100%; background:linear-gradient(90deg, var(--accent-blue) 0%, var(--accent-cyan) 100%); transition:width 0.3s ease; box-shadow:0 0 10px rgba(0,242,254,0.5);"></div>
-      </div>
+      <p id="progressPercent" style="color:#5a5565;font-size:0.82rem;margin:0;">0%</p>
     </div>
   </div>
 
@@ -73,101 +158,77 @@
      ============================================================ -->
 <div class="job-processing-wrap">
   <div class="job-processing-card">
-
-    <div class="job-pulse-ring">
-      <div class="job-pulse-dot"></div>
-    </div>
-
+    <div class="job-pulse-ring"><div class="job-pulse-dot"></div></div>
     <h2 class="job-title">Analysing <span class="job-topic-name">{{ current_topic }}</span></h2>
     <p class="job-desc">
       We're scraping Reddit and running AI sentiment analysis in the background.<br>
       You can close this tab — we'll email you when the results are ready.
     </p>
-
     <div class="job-steps">
-      <div class="job-step" id="step-fetch">
-        <span class="step-dot active"></span>
-        <span class="step-label">Fetching Reddit comments</span>
-      </div>
-      <div class="job-step" id="step-analyse">
-        <span class="step-dot"></span>
-        <span class="step-label">Running sentiment model</span>
-      </div>
-      <div class="job-step" id="step-store">
-        <span class="step-dot"></span>
-        <span class="step-label">Storing results</span>
-      </div>
-      <div class="job-step" id="step-email">
-        <span class="step-dot"></span>
-        <span class="step-label">Sending you an email</span>
-      </div>
+      <div class="job-step" id="step-fetch"><span class="step-dot active"></span><span class="step-label">Fetching Reddit comments</span></div>
+      <div class="job-step" id="step-analyse"><span class="step-dot"></span><span class="step-label">Running sentiment model</span></div>
+      <div class="job-step" id="step-store"><span class="step-dot"></span><span class="step-label">Storing results</span></div>
+      <div class="job-step" id="step-email"><span class="step-dot"></span><span class="step-label">Sending you an email</span></div>
     </div>
-
     <p class="job-note">
       This usually takes <strong>5 – 10 minutes</strong>.
       You'll receive an email at <strong>{{ user.get_email() }}</strong> when it's done.
     </p>
-
     <a href="{{ url_for('main.home') }}" class="job-home-btn">← Back to Home</a>
   </div>
 </div>
 
 <script>
 (function () {
-  const topic   = {{ current_topic | tojson }};
-  const steps   = ['step-fetch', 'step-analyse', 'step-store', 'step-email'];
-  let stepIdx   = 0;
-  let pollCount = 0;
-
-  // Simulate step progression every ~90s (visual only — server state drives real completion)
+  const topic = {{ current_topic | tojson }};
+  const steps = ['step-fetch', 'step-analyse', 'step-store', 'step-email'];
+  let stepIdx = 0;
   const stepTimer = setInterval(() => {
     if (stepIdx < steps.length - 1) {
-      document.getElementById(steps[stepIdx]).querySelector('.step-dot').classList.remove('active');
-      document.getElementById(steps[stepIdx]).querySelector('.step-dot').classList.add('done');
+      document.getElementById(steps[stepIdx]).querySelector('.step-dot').classList.replace('active','done');
       stepIdx++;
       document.getElementById(steps[stepIdx]).querySelector('.step-dot').classList.add('active');
     }
   }, 90000);
-
-  // Poll the status endpoint every 15 seconds
   const pollTimer = setInterval(async () => {
-    pollCount++;
     try {
       const res  = await fetch(`/api/topic_status?topic=${encodeURIComponent(topic)}`);
       const data = await res.json();
-
       if (data.status === 'complete') {
-        clearInterval(pollTimer);
-        clearInterval(stepTimer);
-        // Mark all steps done
-        steps.forEach(id => {
-          const dot = document.getElementById(id).querySelector('.step-dot');
-          dot.classList.remove('active');
-          dot.classList.add('done');
-        });
-        // Auto-submit the form to reload results
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '/trends';
-        const input = document.createElement('input');
-        input.type  = 'hidden';
-        input.name  = 'topic';
-        input.value = topic;
-        form.appendChild(input);
-        document.body.appendChild(form);
-        form.submit();
+        clearInterval(pollTimer); clearInterval(stepTimer);
+        steps.forEach(id => { const d = document.getElementById(id).querySelector('.step-dot'); d.classList.remove('active'); d.classList.add('done'); });
+        const form = document.createElement('form'); form.method = 'POST'; form.action = '/trends';
+        const inp = document.createElement('input'); inp.type='hidden'; inp.name='topic'; inp.value=topic;
+        form.appendChild(inp); document.body.appendChild(form); form.submit();
       } else if (data.status === 'failed') {
-        clearInterval(pollTimer);
-        clearInterval(stepTimer);
-        document.querySelector('.job-desc').innerHTML =
-          'The analysis encountered an error. Please <a href="/trends" style="color:#4facfe">try again</a>.';
-        document.querySelector('.job-pulse-ring').style.background = 'rgba(239,68,68,0.15)';
-        document.querySelector('.job-pulse-dot').style.background  = '#ef4444';
+        clearInterval(pollTimer); clearInterval(stepTimer);
+        document.querySelector('.job-desc').innerHTML = 'The analysis encountered an error. Please <a href="/trends" style="color:#4facfe">try again</a>.';
       }
-    } catch (_) { /* network blip — keep polling */ }
+    } catch (_) {}
   }, 15000);
 })();
 </script>
+
+{% else %}
+
+{% if not has_data %}
+<!-- ============================================================
+     NO DATA STATE
+     ============================================================ -->
+<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:80px 20px; text-align:center;">
+  <div style="font-size:3rem; margin-bottom:20px;">📭</div>
+  <h2 style="color:#f8fafc; font-size:1.5rem; margin-bottom:10px;">No analysis data found for <span style="color:#4facfe">{{ current_topic }}</span></h2>
+  <p style="color:#94a3b8; max-width:460px; margin-bottom:28px;">
+    This scan exists but has no comment data — the background analysis may have failed or is still running.
+    Re-submit the topic to start a fresh analysis.
+  </p>
+  <form method="POST" action="{{ url_for('main.trends') }}" style="margin:0;">
+    <input type="hidden" name="topic" value="{{ current_topic }}">
+    <button type="submit" style="padding:12px 28px; background:linear-gradient(90deg,#4facfe,#a855f7); color:#fff; border:none; border-radius:8px; font-size:0.95rem; font-weight:600; cursor:pointer;">
+      Re-run Analysis
+    </button>
+  </form>
+</div>
 
 {% else %}
 
@@ -182,12 +243,11 @@
   "America vs Iran":   "americavsiran.png"
 } %}
 {% set hero_img = topic_images.get(current_topic) %}
+{% set _hero_url = url_for('static', filename='images/' ~ hero_img) if hero_img else (topic_cover_url or '') %}
 
-<div class="analysis-hero {% if not hero_img %}no-image{% endif %}"
-     {% if hero_img %}style="--hero-bg: url('{{ url_for('static', filename='images/' ~ hero_img) }}')"{% endif %}>
+<div class="analysis-hero {% if not _hero_url %}no-image{% endif %}"
+     {% if _hero_url %}style="--hero-bg: url('{{ _hero_url }}')"{% endif %}>
   <div class="analysis-hero-inner">
-
-    <!-- Left: Topic name + stats -->
     <div class="analysis-hero-text">
       <p class="analysis-label">Sentiment Report</p>
       <h2 class="analysis-topic-name">{{ current_topic }}</h2>
@@ -198,8 +258,6 @@
       </p>
       {% endif %}
     </div>
-
-    <!-- Right: Rating gauge -->
     {% if topic_info and topic_info.rating is not none %}
     {% set r = topic_info.rating | float %}
     {% set pct = ((r + 100) / 200 * 100) %}
@@ -214,9 +272,7 @@
           {% endif %}
           <div class="rating-thumb" style="left:{{ (pct | round(1)) }}%;"></div>
         </div>
-        <div class="rating-axis">
-          <span>-100</span><span>0</span><span>+100</span>
-        </div>
+        <div class="rating-axis"><span>-100</span><span>0</span><span>+100</span></div>
       </div>
       <div class="rating-value-row">
         <span class="rating-score {{ topic_info.sentiment | lower | default('neutral') }}">
@@ -227,384 +283,779 @@
         </span>
       </div>
       <p class="rating-legend">Composite score: volume · engagement · intensity</p>
+      <p id="gemini-psi-meaning" style="display:none;font-size:0.8rem;color:rgba(245,240,232,0.55);line-height:1.6;margin-top:8px;max-width:320px;"></p>
     </div>
     {% endif %}
-
+    {% if has_data %}
+    <div class="export-actions">
+      <button class="export-btn" onclick="exportPDF()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+          <polyline points="10 9 9 9 8 9"/>
+        </svg>
+        Save as PDF
+      </button>
+    </div>
+    {% endif %}
   </div>
 </div>
 
 
-<!-- ============================================================
-     MAIN ANALYSIS GRID
-     ============================================================ -->
+
+<!-- ── GEMINI TOPIC CONTEXT ──────────────────────────────────────── -->
+<div id="gemini-topic-context-bar" style="display:none;margin:0 auto 0;max-width:900px;padding:14px 28px;border-left:3px solid var(--accent);background:var(--surface-2);">
+  <span style="font-size:0.68rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:5px;">AI Context</span>
+  <p id="gemini-topic-context-text" style="font-size:0.88rem;color:rgba(245,240,232,0.7);line-height:1.7;margin:0;"></p>
+</div>
+
+<!-- ── PLATFORM TOGGLE ──────────────────────────────────────────── -->
+<div class="platform-toggle-wrap">
+  <div class="platform-toggle">
+    <button class="ptoggle-btn active" onclick="switchPlatform('all',this)">All Sources</button>
+    <button class="ptoggle-btn" onclick="switchPlatform('reddit',this)">
+      <svg width="14" height="14" viewBox="0 0 20 20"><circle cx="10" cy="10" r="10" fill="#ff4500"/><path d="M16.7 10a1.4 1.4 0 0 0-2.4-1 6.9 6.9 0 0 0-3.8-1.2l.6-2.9 2 .4a1 1 0 1 0 .1-.5l-2.3-.5a.3.3 0 0 0-.3.2l-.7 3.3a6.9 6.9 0 0 0-3.8 1.2 1.4 1.4 0 1 0-1.6 2.2 2.8 2.8 0 0 0 0 .5c0 2.5 2.9 4.5 6.5 4.5s6.5-2 6.5-4.5a2.8 2.8 0 0 0 0-.5 1.4 1.4 0 0 0 .2-.7zM7 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0zm5.6 2.6a3.5 3.5 0 0 1-2.1.6 3.5 3.5 0 0 1-2.1-.6.2.2 0 0 1 .3-.3 3 3 0 0 0 1.8.5 3 3 0 0 0 1.8-.5.2.2 0 0 1 .3.3zm-.2-1.6a1 1 0 1 1 0-2 1 1 0 0 1 0 2z" fill="#fff"/></svg>
+      Reddit
+    </button>
+    {% if has_youtube %}
+    <button class="ptoggle-btn" onclick="switchPlatform('youtube',this)">
+      <svg width="14" height="14" viewBox="0 0 24 24"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31.3 31.3 0 0 0 0 12a31.3 31.3 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31.3 31.3 0 0 0 24 12a31.3 31.3 0 0 0-.5-5.8z" fill="#ff0000"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="#fff"/></svg>
+      YouTube
+    </button>
+    <button class="ptoggle-btn compare-btn" onclick="switchPlatform('compare',this)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/><path d="M15 18l-6-6 6-6" opacity=".4"/></svg>
+      Reddit vs YouTube
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PANEL: ALL SOURCES
+     ═══════════════════════════════════════════════════════════════ -->
+<div id="panel-all" class="tab-panel" style="display:none">
 <div class="trends-container">
 
-  <!-- Community Voices -->
-  {% if top_positive or top_negative %}
-  <div class="section-header">
-    <div class="section-header-inner">
-      <span class="section-title">Top Community Voices</span>
-      <span class="section-desc">Highest upvoted comment from each side of the discourse</span>
+  <!-- ── SECTION 1: BIG TAKEAWAY ────────────────────────────────── -->
+  <div class="narrative-section full">
+    <div class="narrative-section-label">Big Takeaway</div>
+    {{ takeaways_panel(insights_all.takeaways if insights_all else None) }}
+    <div class="gemini-summary-card full"{% if not (insights_all and insights_all.gemini_insights and insights_all.gemini_insights.summary) %} style="display:none"{% endif %}>
+      <span class="gemini-label">AI Summary</span>
+      <p class="gemini-summary-text">{{ (insights_all.gemini_insights.summary if insights_all and insights_all.gemini_insights else '') or '' }}</p>
     </div>
   </div>
 
-  <div class="reddit-voices">
-    {% if top_positive %}
-    <div class="reddit-voice-group">
-      <p class="voice-label positive-label">Most Viral Support</p>
-      <div class="reddit-card">
-        <div class="reddit-votes">
-          <span class="r-up">▲</span>
-          <span class="r-score">{{ top_positive.score }}</span>
-          <span class="r-down">▼</span>
-        </div>
-        <div class="r-content">
-          <div class="r-meta">
-            Posted by <span class="r-author">u/{{ top_positive.author }}</span>
-            <span class="r-badge positive">Positive · {{ "%.0f" | format(top_positive.confidence_score * 100) }}%</span>
-          </div>
-          <div class="r-text">{{ top_positive.text }}</div>
-        </div>
+  <!-- ── SECTION 2: SUPPORTING EVIDENCE ─────────────────────────── -->
+  <div class="narrative-section full">
+    <div class="narrative-section-label">Supporting Evidence</div>
+
+    {% if has_youtube and source_split %}
+    <div class="source-split-row full">
+      <div class="source-pill reddit-pill">
+        <svg width="22" height="22" viewBox="0 0 20 20"><circle cx="10" cy="10" r="10" fill="#ff4500"/><path d="M16.7 10a1.4 1.4 0 0 0-2.4-1 6.9 6.9 0 0 0-3.8-1.2l.6-2.9 2 .4a1 1 0 1 0 .1-.5l-2.3-.5a.3.3 0 0 0-.3.2l-.7 3.3a6.9 6.9 0 0 0-3.8 1.2 1.4 1.4 0 1 0-1.6 2.2 2.8 2.8 0 0 0 0 .5c0 2.5 2.9 4.5 6.5 4.5s6.5-2 6.5-4.5a2.8 2.8 0 0 0 0-.5 1.4 1.4 0 0 0 .2-.7zM7 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0zm5.6 2.6a3.5 3.5 0 0 1-2.1.6 3.5 3.5 0 0 1-2.1-.6.2.2 0 0 1 .3-.3 3 3 0 0 0 1.8.5 3 3 0 0 0 1.8-.5.2.2 0 0 1 .3.3zm-.2-1.6a1 1 0 1 1 0-2 1 1 0 0 1 0 2z" fill="#fff"/></svg>
+        <div><span class="source-pill-label">Reddit</span><span class="source-pill-count">{{ source_split.reddit_count }} comments · {{ source_split.reddit_pct }}%</span></div>
+      </div>
+      <div class="source-split-bar">
+        <div class="split-reddit-fill" style="width:{{ source_split.reddit_pct }}%"></div>
+        <div class="split-yt-fill"     style="width:{{ source_split.youtube_pct }}%"></div>
+      </div>
+      <div class="source-pill yt-pill">
+        <svg width="22" height="22" viewBox="0 0 24 24"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31.3 31.3 0 0 0 0 12a31.3 31.3 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31.3 31.3 0 0 0 24 12a31.3 31.3 0 0 0-.5-5.8z" fill="#ff0000"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="#fff"/></svg>
+        <div><span class="source-pill-label">YouTube</span><span class="source-pill-count">{{ source_split.youtube_count }} comments · {{ source_split.youtube_pct }}%</span></div>
       </div>
     </div>
     {% endif %}
 
-    {% if top_negative %}
-    <div class="reddit-voice-group">
-      <p class="voice-label negative-label">Most Viral Criticism</p>
-      <div class="reddit-card">
-        <div class="reddit-votes">
-          <span class="r-up">▲</span>
-          <span class="r-score">{{ top_negative.score }}</span>
-          <span class="r-down">▼</span>
-        </div>
-        <div class="r-content">
-          <div class="r-meta">
-            Posted by <span class="r-author">u/{{ top_negative.author }}</span>
-            <span class="r-badge negative">Negative · {{ "%.0f" | format(top_negative.confidence_score * 100) }}%</span>
-          </div>
-          <div class="r-text">{{ top_negative.text }}</div>
-        </div>
-      </div>
+    <div class="section-question full">How does the public feel?</div>
+    <div class="chart-card third">
+      <div class="chart-body"><canvas id="all-chart1"></canvas></div>
+    </div>
+
+    {% if has_youtube %}
+    <div class="chart-card third">
+      <div class="chart-header"><h3 class="chart-title">Reddit vs YouTube</h3><p class="chart-subtitle">Positive · Negative by platform</p></div>
+      <div class="chart-body"><canvas id="all-platform-compare"></canvas></div>
+      <p class="gemini-platform-desc" style="display:none;font-size:0.81rem;color:#94a3b8;padding:10px 16px 6px;line-height:1.6;margin:0;"></p>
     </div>
     {% endif %}
+
+    <div class="section-question full">How has sentiment changed over time?</div>
+    <div class="chart-card full">
+      <div class="chart-body tall"><canvas id="all-chart2"></canvas></div>
+    </div>
+
+    <div class="section-question full">Is sentiment getting better or worse?</div>
+    <div class="chart-card full">
+      <div class="chart-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div><p class="chart-subtitle">7-day rolling net sentiment — rising = public opinion improving</p></div>
+        <div id="all-momentum-badge" style="flex-shrink:0;margin-left:16px;"></div>
+      </div>
+      <div class="chart-body"><canvas id="all-momentum"></canvas></div>
+      <p class="gemini-momentum-desc" style="display:none;font-size:0.81rem;color:#94a3b8;padding:10px 16px 6px;line-height:1.6;margin:0;"></p>
+    </div>
+
+    <div class="section-question full">What are people actually saying?</div>
+    <div class="chart-card half">
+      <div class="chart-header"><h3 class="chart-title">What People Love</h3><p class="chart-subtitle">Top phrases in positive comments — with a real quote</p></div>
+      <div class="kw-ai-overview pos"{% if not (insights_all and insights_all.gemini_insights and insights_all.gemini_insights.keyword_love) %} style="display:none"{% endif %}>
+        <span class="kw-ai-label pos">AI Overview</span>
+        <p class="kw-ai-text">{{ (insights_all.gemini_insights.keyword_love if insights_all and insights_all.gemini_insights else '') or '' }}</p>
+      </div>
+      <div id="all-kwPos" class="kw-list"></div>
+    </div>
+    <div class="chart-card half">
+      <div class="chart-header"><h3 class="chart-title">What People Criticise</h3><p class="chart-subtitle">Top phrases in negative comments — with a real quote</p></div>
+      <div class="kw-ai-overview neg"{% if not (insights_all and insights_all.gemini_insights and insights_all.gemini_insights.keyword_criticise) %} style="display:none"{% endif %}>
+        <span class="kw-ai-label neg">AI Overview</span>
+        <p class="kw-ai-text">{{ (insights_all.gemini_insights.keyword_criticise if insights_all and insights_all.gemini_insights else '') or '' }}</p>
+      </div>
+      <div id="all-kwNeg" class="kw-list"></div>
+    </div>
+
+    <div class="section-question full">What topics are being argued about?</div>
+    <p class="gemini-debate-summary" style="display:none;font-size:0.85rem;color:rgba(245,240,232,0.6);padding:0 0 10px;line-height:1.7;margin:0;"></p>
+    <div class="chart-card full">
+      <div id="all-debateCards" class="yt-sent-rows"></div>
+    </div>
+
+    <div class="section-question full">What posts drove the conversation?</div>
+    <p class="gemini-viral-posts" style="display:none;font-size:0.85rem;color:rgba(245,240,232,0.6);padding:0 0 10px;line-height:1.7;margin:0;"></p>
+    <div class="chart-card full">
+      <div id="all-top10Cards" class="top10-post-cards"></div>
+    </div>
+
+    <div class="section-question full">Hear directly from the community</div>
+    {{ community_voices(top_positive, top_negative) }}
+
+  </div><!-- /narrative-section supporting -->
+
+  <!-- ── SECTION 3: DEEP DIVE ────────────────────────────────────── -->
+  <div class="deep-dive-section full"
+       data-topic-id="{{ topic_id_for_deep_dive or '' }}"
+       data-topic-name="{{ current_topic or '' }}">
+    <button class="deep-dive-toggle" onclick="toggleDeepDive(this,'all')">
+      <span class="dd-icon">▶</span>
+      <span>Advanced Analytics</span>
+      <span class="dd-sub">11 detailed charts with AI explanations</span>
+    </button>
+    <div class="deep-dive-body" style="display:none">
+      <div class="dd-loading" style="display:none">
+        <div class="dd-loading-bar-wrap"><div class="dd-loading-bar"></div></div>
+        <p class="dd-loading-text">Computing advanced analytics…</p>
+      </div>
+      <div class="dd-charts-grid">
+      <div class="trends-container" style="padding:0; margin:0;">
+
+        {{ deep_dive_card('half', 'Do positive comments get more upvotes?',
+            insights_all.gemini_insights.engagement if insights_all and insights_all.gemini_insights else '',
+            'all-chart3') }}
+
+        {{ deep_dive_card('half', 'Does being positive help go viral?',
+            insights_all.gemini_insights.scatter if insights_all and insights_all.gemini_insights else '',
+            'all-chart4') }}
+
+        {{ deep_dive_card('half', 'How much do opinions shift day to day?',
+            insights_all.gemini_insights.volatility if insights_all and insights_all.gemini_insights else '',
+            'all-chart6') }}
+
+        {{ deep_dive_card('half', 'Are a few posts getting all the attention?',
+            insights_all.gemini_insights.score_dist if insights_all and insights_all.gemini_insights else '',
+            'all-chart13') }}
+
+        {{ deep_dive_card('half', 'How certain are positive commenters?',
+            insights_all.gemini_insights.pos_intensity if insights_all and insights_all.gemini_insights else '',
+            'all-chart8') }}
+
+        {{ deep_dive_card('half', 'How certain are negative commenters?',
+            insights_all.gemini_insights.neg_intensity if insights_all and insights_all.gemini_insights else '',
+            'all-chart7') }}
+
+        {{ deep_dive_card('half', 'Do longer comments lean positive or negative?',
+            insights_all.gemini_insights.text_length if insights_all and insights_all.gemini_insights else '',
+            'all-chart12') }}
+
+        {{ deep_dive_card('half', 'When are people most active?',
+            insights_all.gemini_insights.peak_hours if insights_all and insights_all.gemini_insights else '',
+            'all-chart10') }}
+
+        {{ deep_dive_card('half', 'Which days see the most discussion?',
+            insights_all.gemini_insights.weekly if insights_all and insights_all.gemini_insights else '',
+            'all-chart15') }}
+
+        {{ deep_dive_card('half', 'How has interest grown over time?',
+            insights_all.gemini_insights.cumulative if insights_all and insights_all.gemini_insights else '',
+            'all-chart14') }}
+
+        {{ deep_dive_card('full', 'Which communities lean which way?',
+            insights_all.gemini_insights.community if insights_all and insights_all.gemini_insights else '',
+            'all-chart17') }}
+
+      </div><!-- /trends-container -->
+      </div><!-- /dd-charts-grid -->
+    </div><!-- /deep-dive-body -->
+  </div><!-- /deep-dive-section -->
+
+</div><!-- /trends-container all -->
+</div><!-- /panel-all -->
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PANEL: REDDIT
+     ═══════════════════════════════════════════════════════════════ -->
+<div id="panel-reddit" class="tab-panel" style="display:none">
+<div id="reddit-panel-loader" class="panel-loading-overlay" style="display:none">
+  <div class="plo-bar-wrap"><div class="plo-bar" id="reddit-plo-bar"></div></div>
+  <p class="plo-text">Preparing Reddit analysis…</p>
+</div>
+<div class="trends-container">
+
+  <!-- ── SECTION 1: BIG TAKEAWAY ────────────────────────────────── -->
+  <div class="narrative-section full">
+    <div class="narrative-section-label">Big Takeaway</div>
+    {{ takeaways_panel(insights_data.takeaways if insights_data else None) }}
+    <div class="gemini-summary-card full"{% if not (insights_data and insights_data.gemini_insights and insights_data.gemini_insights.summary) %} style="display:none"{% endif %}>
+      <span class="gemini-label">AI Summary</span>
+      <p class="gemini-summary-text">{{ (insights_data.gemini_insights.summary if insights_data and insights_data.gemini_insights else '') or '' }}</p>
+    </div>
+  </div>
+
+  <!-- ── SECTION 2: SUPPORTING EVIDENCE ─────────────────────────── -->
+  <div class="narrative-section full">
+    <div class="narrative-section-label">Supporting Evidence</div>
+
+    <div class="section-question full">How does the public feel?</div>
+    <div class="chart-card third">
+      <div class="chart-body"><canvas id="reddit-chart1"></canvas></div>
+    </div>
+
+    <div class="section-question full">How has sentiment changed over time?</div>
+    <div class="chart-card full">
+      <div class="chart-body tall"><canvas id="reddit-chart2"></canvas></div>
+    </div>
+
+    <div class="section-question full">Is sentiment getting better or worse?</div>
+    <div class="chart-card full">
+      <div class="chart-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div><p class="chart-subtitle">7-day rolling net sentiment — rising = public opinion improving</p></div>
+        <div id="reddit-momentum-badge" style="flex-shrink:0;margin-left:16px;"></div>
+      </div>
+      <div class="chart-body"><canvas id="reddit-momentum"></canvas></div>
+      <p class="gemini-momentum-desc" style="display:none;font-size:0.81rem;color:#94a3b8;padding:10px 16px 6px;line-height:1.6;margin:0;"></p>
+    </div>
+
+    <div class="section-question full">What are people actually saying?</div>
+    <div class="chart-card half">
+      <div class="chart-header"><h3 class="chart-title">What People Love</h3><p class="chart-subtitle">Top phrases in positive Reddit comments — with a real quote</p></div>
+      <div class="kw-ai-overview pos"{% if not (insights_data and insights_data.gemini_insights and insights_data.gemini_insights.keyword_love) %} style="display:none"{% endif %}>
+        <span class="kw-ai-label pos">AI Overview</span>
+        <p class="kw-ai-text">{{ (insights_data.gemini_insights.keyword_love if insights_data and insights_data.gemini_insights else '') or '' }}</p>
+      </div>
+      <div id="reddit-kwPos" class="kw-list"></div>
+    </div>
+    <div class="chart-card half">
+      <div class="chart-header"><h3 class="chart-title">What People Criticise</h3><p class="chart-subtitle">Top phrases in negative Reddit comments — with a real quote</p></div>
+      <div class="kw-ai-overview neg"{% if not (insights_data and insights_data.gemini_insights and insights_data.gemini_insights.keyword_criticise) %} style="display:none"{% endif %}>
+        <span class="kw-ai-label neg">AI Overview</span>
+        <p class="kw-ai-text">{{ (insights_data.gemini_insights.keyword_criticise if insights_data and insights_data.gemini_insights else '') or '' }}</p>
+      </div>
+      <div id="reddit-kwNeg" class="kw-list"></div>
+    </div>
+
+    <div class="section-question full">What topics are being argued about?</div>
+    <p class="gemini-debate-summary" style="display:none;font-size:0.85rem;color:rgba(245,240,232,0.6);padding:0 0 10px;line-height:1.7;margin:0;"></p>
+    <div class="chart-card full">
+      <div id="reddit-debateCards" class="yt-sent-rows"></div>
+    </div>
+
+    <div class="section-question full">What posts drove the conversation?</div>
+    <p class="gemini-viral-posts" style="display:none;font-size:0.85rem;color:rgba(245,240,232,0.6);padding:0 0 10px;line-height:1.7;margin:0;"></p>
+    <div class="chart-card full">
+      <div id="reddit-top10Cards" class="top10-post-cards"></div>
+    </div>
+
+    <div class="section-question full">Hear directly from the community</div>
+    <div class="reddit-voices full">
+      {% if top_positive %}
+      <div class="reddit-voice-group">
+        <p class="voice-label positive-label">Most Viral Support</p>
+        <div class="reddit-card">
+          <div class="reddit-votes"><span class="r-up">▲</span><span class="r-score">{{ top_positive.score }}</span><span class="r-down">▼</span></div>
+          <div class="r-content">
+            <div class="r-meta">Posted by <span class="r-author">u/{{ top_positive.author }}</span><span class="r-badge positive">Positive · {{ "%.0f" | format(top_positive.confidence_score * 100) }}%</span></div>
+            <div class="r-text">{{ top_positive.text }}</div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+      {% if top_negative %}
+      <div class="reddit-voice-group">
+        <p class="voice-label negative-label">Most Viral Criticism</p>
+        <div class="reddit-card">
+          <div class="reddit-votes"><span class="r-up">▲</span><span class="r-score">{{ top_negative.score }}</span><span class="r-down">▼</span></div>
+          <div class="r-content">
+            <div class="r-meta">Posted by <span class="r-author">u/{{ top_negative.author }}</span><span class="r-badge negative">Negative · {{ "%.0f" | format(top_negative.confidence_score * 100) }}%</span></div>
+            <div class="r-text">{{ top_negative.text }}</div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+  </div><!-- /narrative-section supporting -->
+
+  <!-- ── SECTION 3: DEEP DIVE ────────────────────────────────────── -->
+  <div class="deep-dive-section full">
+    <button class="deep-dive-toggle" onclick="toggleDeepDive(this,'reddit')">
+      <span class="dd-icon">▶</span>
+      <span>Advanced Analytics</span>
+      <span class="dd-sub">11 detailed charts with AI explanations</span>
+    </button>
+    <div class="deep-dive-body" style="display:none">
+      <div class="dd-loading" style="display:none">
+        <div class="dd-loading-bar-wrap"><div class="dd-loading-bar"></div></div>
+        <p class="dd-loading-text">Computing advanced analytics…</p>
+      </div>
+      <div class="dd-charts-grid">
+      <div class="trends-container" style="padding:0; margin:0;">
+
+        {{ deep_dive_card('half', 'Do positive comments get more upvotes?',
+            insights_data.gemini_insights.engagement if insights_data and insights_data.gemini_insights else '',
+            'reddit-chart3') }}
+
+        {{ deep_dive_card('half', 'Does being positive help go viral?',
+            insights_data.gemini_insights.scatter if insights_data and insights_data.gemini_insights else '',
+            'reddit-chart4') }}
+
+        {{ deep_dive_card('half', 'How much do opinions shift day to day?',
+            insights_data.gemini_insights.volatility if insights_data and insights_data.gemini_insights else '',
+            'reddit-chart6') }}
+
+        {{ deep_dive_card('half', 'Are a few posts getting all the attention?',
+            insights_data.gemini_insights.score_dist if insights_data and insights_data.gemini_insights else '',
+            'reddit-chart13') }}
+
+        {{ deep_dive_card('half', 'How certain are positive commenters?',
+            insights_data.gemini_insights.pos_intensity if insights_data and insights_data.gemini_insights else '',
+            'reddit-chart8') }}
+
+        {{ deep_dive_card('half', 'How certain are negative commenters?',
+            insights_data.gemini_insights.neg_intensity if insights_data and insights_data.gemini_insights else '',
+            'reddit-chart7') }}
+
+        {{ deep_dive_card('half', 'Do longer comments lean positive or negative?',
+            insights_data.gemini_insights.text_length if insights_data and insights_data.gemini_insights else '',
+            'reddit-chart12') }}
+
+        {{ deep_dive_card('half', 'When are people most active?',
+            insights_data.gemini_insights.peak_hours if insights_data and insights_data.gemini_insights else '',
+            'reddit-chart10') }}
+
+        {{ deep_dive_card('half', 'Which days see the most discussion?',
+            insights_data.gemini_insights.weekly if insights_data and insights_data.gemini_insights else '',
+            'reddit-chart15') }}
+
+        {{ deep_dive_card('half', 'How has interest grown over time?',
+            insights_data.gemini_insights.cumulative if insights_data and insights_data.gemini_insights else '',
+            'reddit-chart14') }}
+
+        {{ deep_dive_card('full', 'Which subreddits lean which way?',
+            insights_data.gemini_insights.community if insights_data and insights_data.gemini_insights else '',
+            'reddit-chart17') }}
+
+      </div><!-- /trends-container -->
+      </div><!-- /dd-charts-grid -->
+    </div><!-- /deep-dive-body -->
+  </div><!-- /deep-dive-section -->
+
+</div><!-- /trends-container reddit -->
+</div><!-- /panel-reddit -->
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PANEL: YOUTUBE
+     ═══════════════════════════════════════════════════════════════ -->
+{% if has_youtube %}
+<div id="panel-youtube" class="tab-panel" style="display:none">
+<div id="youtube-panel-loader" class="panel-loading-overlay" style="display:none">
+  <div class="plo-bar-wrap"><div class="plo-bar" id="youtube-plo-bar"></div></div>
+  <p class="plo-text">Preparing YouTube analysis…</p>
+</div>
+<div class="trends-container">
+
+  <!-- ── SECTION 1: BIG TAKEAWAY ────────────────────────────────── -->
+  <div class="narrative-section full">
+    <div class="narrative-section-label">Big Takeaway</div>
+    {{ takeaways_panel(insights_youtube.takeaways if insights_youtube else None) }}
+    <div class="gemini-summary-card full"{% if not (insights_youtube and insights_youtube.gemini_insights and insights_youtube.gemini_insights.summary) %} style="display:none"{% endif %}>
+      <span class="gemini-label">AI Summary</span>
+      <p class="gemini-summary-text">{{ (insights_youtube.gemini_insights.summary if insights_youtube and insights_youtube.gemini_insights else '') or '' }}</p>
+    </div>
+  </div>
+
+  <!-- ── SECTION 2: SUPPORTING EVIDENCE ─────────────────────────── -->
+  <div class="narrative-section full">
+    <div class="narrative-section-label">Supporting Evidence</div>
+
+    <!-- Videos Analysed -->
+    <div class="section-question full">Videos analysed</div>
+    <div class="yt-video-cards-list full">
+      {% for card in yt_video_cards %}
+      <div class="yt-video-card-h">
+        <a href="https://www.youtube.com/watch?v={{ card.video_id }}" target="_blank" rel="noopener" class="yt-thumb-link-h">
+          <img src="https://img.youtube.com/vi/{{ card.video_id }}/mqdefault.jpg" class="yt-thumb-h" loading="lazy" alt="{{ card.title }}">
+          <div class="yt-play-overlay-h">▶</div>
+        </a>
+        <div class="yt-card-body-h">
+          <p class="yt-card-title-h">{{ card.title }}</p>
+          <div class="yt-card-meta-h">
+            <span class="yt-stat">{{ card.comment_count }} comments analysed</span>
+            <span class="yt-emotion-pill emotion-{{ card.dominant_emotion | lower }}">{{ card.dominant_emotion | capitalize }}</span>
+          </div>
+          <div class="yt-sentiment-bar">
+            <div class="yt-pos-fill" style="width:{{ card.pos_pct }}%"></div>
+          </div>
+          <p class="yt-pos-label">{{ card.pos_pct }}% positive sentiment</p>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="section-question full">How does the public feel?</div>
+    <div class="chart-card third">
+      <div class="chart-body"><canvas id="yt-chart1"></canvas></div>
+    </div>
+
+    <div class="section-question full">How has sentiment changed over time?</div>
+    <div class="chart-card full">
+      <div class="chart-body tall"><canvas id="yt-chart2"></canvas></div>
+    </div>
+
+    <div class="section-question full">Is sentiment getting better or worse?</div>
+    <div class="chart-card full">
+      <div class="chart-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div><p class="chart-subtitle">7-day rolling net sentiment from YouTube comments</p></div>
+        <div id="yt-momentum-badge" style="flex-shrink:0;margin-left:16px;"></div>
+      </div>
+      <div class="chart-body"><canvas id="yt-momentum"></canvas></div>
+      <p class="gemini-momentum-desc" style="display:none;font-size:0.81rem;color:#94a3b8;padding:10px 16px 6px;line-height:1.6;margin:0;"></p>
+    </div>
+
+    <div class="section-question full">What are YouTube viewers actually saying?</div>
+    {% if insights_youtube and insights_youtube.keyword_split %}
+    <div class="chart-card half">
+      <div class="chart-header"><h3 class="chart-title">What They Love</h3><p class="chart-subtitle">Top phrases in positive YouTube comments</p></div>
+      <div class="kw-ai-overview pos"{% if not (insights_youtube and insights_youtube.gemini_insights and insights_youtube.gemini_insights.keyword_love) %} style="display:none"{% endif %}>
+        <span class="kw-ai-label pos">AI Overview</span>
+        <p class="kw-ai-text">{{ (insights_youtube.gemini_insights.keyword_love if insights_youtube and insights_youtube.gemini_insights else '') or '' }}</p>
+      </div>
+      <div id="yt-kwPos" class="kw-list"></div>
+    </div>
+    <div class="chart-card half">
+      <div class="chart-header"><h3 class="chart-title">What They Criticise</h3><p class="chart-subtitle">Top phrases in negative YouTube comments</p></div>
+      <div class="kw-ai-overview neg"{% if not (insights_youtube and insights_youtube.gemini_insights and insights_youtube.gemini_insights.keyword_criticise) %} style="display:none"{% endif %}>
+        <span class="kw-ai-label neg">AI Overview</span>
+        <p class="kw-ai-text">{{ (insights_youtube.gemini_insights.keyword_criticise if insights_youtube and insights_youtube.gemini_insights else '') or '' }}</p>
+      </div>
+      <div id="yt-kwNeg" class="kw-list"></div>
+    </div>
+    {% endif %}
+
+    <div class="section-question full">What videos are being debated?</div>
+    <p class="gemini-debate-summary" style="display:none;font-size:0.85rem;color:rgba(245,240,232,0.6);padding:0 0 10px;line-height:1.7;margin:0;"></p>
+    <div class="chart-card full">
+      <div id="yt-debateCards" class="yt-sent-rows"></div>
+    </div>
+
+    <div class="section-question full">Which videos drove the conversation?</div>
+    <p class="gemini-viral-posts" style="display:none;font-size:0.85rem;color:rgba(245,240,232,0.6);padding:0 0 10px;line-height:1.7;margin:0;"></p>
+    <div id="yt-sentByVideoCards" class="yt-sent-rows full"></div>
+
+    <div class="section-question full">Hear directly from YouTube viewers</div>
+    {% if top_positive_yt or top_negative_yt %}
+    <div class="yt-voices-wrap full">
+      {% if top_positive_yt %}
+      <div class="yt-voice-col">
+        <p class="yt-voice-label pos">Most Liked Positive Comment</p>
+        <div class="yt-comment-card">
+          <div class="yt-avatar">{{ (top_positive_yt.author or 'A')[0] }}</div>
+          <div class="yt-comment-body">
+            <div class="yt-comment-meta">
+              <span class="yt-comment-author">{{ top_positive_yt.author }}</span>
+              <span class="yt-comment-sentiment-pill" style="background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.3);">Positive</span>
+            </div>
+            <p class="yt-comment-text">{{ top_positive_yt.text }}</p>
+            <div class="yt-comment-actions">
+              <span class="yt-like-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+                {{ top_positive_yt.score }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+      {% if top_negative_yt %}
+      <div class="yt-voice-col">
+        <p class="yt-voice-label neg">Most Liked Negative Comment</p>
+        <div class="yt-comment-card">
+          <div class="yt-avatar" style="background:linear-gradient(135deg,#ef4444,#f97316)">{{ (top_negative_yt.author or 'A')[0] }}</div>
+          <div class="yt-comment-body">
+            <div class="yt-comment-meta">
+              <span class="yt-comment-author">{{ top_negative_yt.author }}</span>
+              <span class="yt-comment-sentiment-pill" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">Negative</span>
+            </div>
+            <p class="yt-comment-text">{{ top_negative_yt.text }}</p>
+            <div class="yt-comment-actions">
+              <span class="yt-like-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+                {{ top_negative_yt.score }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+  </div><!-- /narrative-section supporting -->
+
+  <!-- ── SECTION 3: DEEP DIVE ────────────────────────────────────── -->
+  <div class="deep-dive-section full">
+    <button class="deep-dive-toggle" onclick="toggleDeepDive(this,'youtube')">
+      <span class="dd-icon">▶</span>
+      <span>Advanced Analytics</span>
+      <span class="dd-sub">11 detailed charts with AI explanations</span>
+    </button>
+    <div class="deep-dive-body" style="display:none">
+      <div class="dd-loading" style="display:none">
+        <div class="dd-loading-bar-wrap"><div class="dd-loading-bar"></div></div>
+        <p class="dd-loading-text">Computing advanced analytics…</p>
+      </div>
+      <div class="dd-charts-grid">
+      <div class="trends-container" style="padding:0; margin:0;">
+
+        {{ deep_dive_card('half', 'Do positive comments get more likes?',
+            insights_youtube.gemini_insights.engagement if insights_youtube and insights_youtube.gemini_insights else '',
+            'yt-chart3') }}
+
+        {{ deep_dive_card('half', 'Does being positive help go viral?',
+            insights_youtube.gemini_insights.scatter if insights_youtube and insights_youtube.gemini_insights else '',
+            'yt-chart4') }}
+
+        {{ deep_dive_card('half', 'How much do opinions shift day to day?',
+            insights_youtube.gemini_insights.volatility if insights_youtube and insights_youtube.gemini_insights else '',
+            'yt-chart6') }}
+
+        {{ deep_dive_card('half', 'Are a few comments getting all the likes?',
+            insights_youtube.gemini_insights.score_dist if insights_youtube and insights_youtube.gemini_insights else '',
+            'yt-chart13') }}
+
+        {{ deep_dive_card('half', 'How certain are positive commenters?',
+            insights_youtube.gemini_insights.pos_intensity if insights_youtube and insights_youtube.gemini_insights else '',
+            'yt-chart8') }}
+
+        {{ deep_dive_card('half', 'How certain are negative commenters?',
+            insights_youtube.gemini_insights.neg_intensity if insights_youtube and insights_youtube.gemini_insights else '',
+            'yt-chart7') }}
+
+        {{ deep_dive_card('half', 'Do longer comments lean positive or negative?',
+            insights_youtube.gemini_insights.text_length if insights_youtube and insights_youtube.gemini_insights else '',
+            'yt-chart12') }}
+
+        {{ deep_dive_card('half', 'When are viewers most active?',
+            insights_youtube.gemini_insights.peak_hours if insights_youtube and insights_youtube.gemini_insights else '',
+            'yt-chart10') }}
+
+        {{ deep_dive_card('half', 'Which days see the most discussion?',
+            insights_youtube.gemini_insights.weekly if insights_youtube and insights_youtube.gemini_insights else '',
+            'yt-chart15') }}
+
+        {{ deep_dive_card('half', 'How has interest grown over time?',
+            insights_youtube.gemini_insights.cumulative if insights_youtube and insights_youtube.gemini_insights else '',
+            'yt-chart14') }}
+
+        {{ deep_dive_card('full', 'Which videos lean which way?',
+            insights_youtube.gemini_insights.community if insights_youtube and insights_youtube.gemini_insights else '',
+            'yt-chart17') }}
+
+      </div><!-- /trends-container -->
+      </div><!-- /dd-charts-grid -->
+    </div><!-- /deep-dive-body -->
+  </div><!-- /deep-dive-section -->
+
+</div><!-- /trends-container youtube -->
+</div><!-- /panel-youtube -->
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PANEL: COMPARE PLATFORMS (Reddit vs YouTube)
+     ═══════════════════════════════════════════════════════════════ -->
+<div id="panel-compare" class="tab-panel" style="display:none">
+<div class="trends-container">
+
+  <!-- ── PLATFORM OVERVIEW CARDS ────────────────────────────────── -->
+  <div class="section-question full" style="margin-top:8px;">Platform comparison for <strong>{{ current_topic }}</strong></div>
+
+  <!-- Reddit card -->
+  <div class="chart-card half cmp-platform-card">
+    <div class="cmp-platform-header">
+      <svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="10" fill="#ff4500"/><path d="M16.7 10a1.4 1.4 0 0 0-2.4-1 6.9 6.9 0 0 0-3.8-1.2l.6-2.9 2 .4a1 1 0 1 0 .1-.5l-2.3-.5a.3.3 0 0 0-.3.2l-.7 3.3a6.9 6.9 0 0 0-3.8 1.2 1.4 1.4 0 1 0-1.6 2.2 2.8 2.8 0 0 0 0 .5c0 2.5 2.9 4.5 6.5 4.5s6.5-2 6.5-4.5a2.8 2.8 0 0 0 0-.5 1.4 1.4 0 0 0 .2-.7zM7 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0zm5.6 2.6a3.5 3.5 0 0 1-2.1.6 3.5 3.5 0 0 1-2.1-.6.2.2 0 0 1 .3-.3 3 3 0 0 0 1.8.5 3 3 0 0 0 1.8-.5.2.2 0 0 1 .3.3zm-.2-1.6a1 1 0 1 1 0-2 1 1 0 0 1 0 2z" fill="#fff"/></svg>
+      Reddit
+      <span class="cmp-platform-badge reddit">r/ community</span>
+      {% if source_split %}<span style="font-size:0.75rem;color:var(--text-muted);font-weight:400;margin-left:auto;">{{ source_split.reddit_count }} comments</span>{% endif %}
+    </div>
+    {% if insights_data and insights_data.takeaways %}
+    {% set rt = insights_data.takeaways %}
+    <div class="cmp-stats-row">
+      <div class="cmp-stat"><div class="cmp-stat-label">Positive</div><div class="cmp-stat-value pos">{{ rt.pos_pct }}%</div></div>
+      <div class="cmp-stat"><div class="cmp-stat-label">Negative</div><div class="cmp-stat-value neg">{{ rt.neg_pct }}%</div></div>
+      <div class="cmp-stat"><div class="cmp-stat-label">Division</div><div class="cmp-stat-value neu">{{ rt.division_score }}%</div></div>
+    </div>
+    {% if rt.top_praised %}
+    <div style="font-size:0.8rem;color:#94a3b8;padding:8px 12px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:8px;">
+      <span style="color:#10b981;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.1em;display:block;margin-bottom:4px;">Most Praised</span>
+      "{{ rt.top_praised }}"
+    </div>
+    {% endif %}
+    {% if rt.top_criticised %}
+    <div style="font-size:0.8rem;color:#94a3b8;padding:8px 12px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:8px;">
+      <span style="color:#ef4444;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.1em;display:block;margin-bottom:4px;">Most Criticised</span>
+      "{{ rt.top_criticised }}"
+    </div>
+    {% endif %}
+    {% endif %}
+    {% if insights_data and insights_data.gemini_insights and insights_data.gemini_insights.summary %}
+    <div class="cmp-gemini-row">
+      <span class="gemini-label" style="flex-shrink:0;">AI</span>
+      <p class="cmp-gemini-text">{{ insights_data.gemini_insights.summary }}</p>
+    </div>
+    {% endif %}
+    <div class="cmp-donut-wrap"><canvas id="cmp-reddit-chart1"></canvas></div>
+  </div>
+
+  <!-- YouTube card -->
+  <div class="chart-card half cmp-platform-card">
+    <div class="cmp-platform-header">
+      <svg width="20" height="20" viewBox="0 0 24 24"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31.3 31.3 0 0 0 0 12a31.3 31.3 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31.3 31.3 0 0 0 24 12a31.3 31.3 0 0 0-.5-5.8z" fill="#ff0000"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="#fff"/></svg>
+      YouTube
+      <span class="cmp-platform-badge youtube">video comments</span>
+      {% if source_split %}<span style="font-size:0.75rem;color:var(--text-muted);font-weight:400;margin-left:auto;">{{ source_split.youtube_count }} comments</span>{% endif %}
+    </div>
+    {% if insights_youtube and insights_youtube.takeaways %}
+    {% set yt = insights_youtube.takeaways %}
+    <div class="cmp-stats-row">
+      <div class="cmp-stat"><div class="cmp-stat-label">Positive</div><div class="cmp-stat-value pos">{{ yt.pos_pct }}%</div></div>
+      <div class="cmp-stat"><div class="cmp-stat-label">Negative</div><div class="cmp-stat-value neg">{{ yt.neg_pct }}%</div></div>
+      <div class="cmp-stat"><div class="cmp-stat-label">Division</div><div class="cmp-stat-value neu">{{ yt.division_score }}%</div></div>
+    </div>
+    {% if yt.top_praised %}
+    <div style="font-size:0.8rem;color:#94a3b8;padding:8px 12px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:8px;">
+      <span style="color:#10b981;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.1em;display:block;margin-bottom:4px;">Most Praised</span>
+      "{{ yt.top_praised }}"
+    </div>
+    {% endif %}
+    {% if yt.top_criticised %}
+    <div style="font-size:0.8rem;color:#94a3b8;padding:8px 12px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:8px;">
+      <span style="color:#ef4444;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.1em;display:block;margin-bottom:4px;">Most Criticised</span>
+      "{{ yt.top_criticised }}"
+    </div>
+    {% endif %}
+    {% endif %}
+    {% if insights_youtube and insights_youtube.gemini_insights and insights_youtube.gemini_insights.summary %}
+    <div class="cmp-gemini-row">
+      <span class="gemini-label" style="flex-shrink:0;">AI</span>
+      <p class="cmp-gemini-text">{{ insights_youtube.gemini_insights.summary }}</p>
+    </div>
+    {% endif %}
+    <div class="cmp-donut-wrap"><canvas id="cmp-yt-chart1"></canvas></div>
+  </div>
+
+  <!-- ── HEAD-TO-HEAD BAR CHART ──────────────────────────────────── -->
+  <div class="cmp-divider-label">Head-to-head sentiment</div>
+  <div class="chart-card full">
+    <div class="chart-header">
+      <h3 class="chart-title">Reddit vs YouTube — Sentiment Breakdown</h3>
+      <p class="chart-subtitle">Side-by-side positive / negative / neutral %</p>
+    </div>
+    <div class="chart-body"><canvas id="cmp-h2h"></canvas></div>
+  </div>
+
+  <!-- ── TIMELINE COMPARISON ────────────────────────────────────── -->
+  <div class="cmp-divider-label">Sentiment over time</div>
+  <div class="chart-card half">
+    <div class="chart-header"><h3 class="chart-title">Reddit Timeline</h3><p class="chart-subtitle">Daily sentiment from Reddit comments</p></div>
+    <div class="chart-body tall"><canvas id="cmp-reddit-chart2"></canvas></div>
+  </div>
+  <div class="chart-card half">
+    <div class="chart-header"><h3 class="chart-title">YouTube Timeline</h3><p class="chart-subtitle">Daily sentiment from YouTube comments</p></div>
+    <div class="chart-body tall"><canvas id="cmp-yt-chart2"></canvas></div>
+  </div>
+
+  <!-- ── WHAT PEOPLE SAY ────────────────────────────────────────── -->
+  <div class="cmp-divider-label">What people love</div>
+  <div class="chart-card half">
+    <div class="chart-header"><h3 class="chart-title">Reddit — What People Love</h3><p class="chart-subtitle">Top phrases in positive Reddit comments</p></div>
+    <div id="cmp-reddit-kwPos" class="kw-list"></div>
+  </div>
+  <div class="chart-card half">
+    <div class="chart-header"><h3 class="chart-title">YouTube — What They Love</h3><p class="chart-subtitle">Top phrases in positive YouTube comments</p></div>
+    <div id="cmp-yt-kwPos" class="kw-list"></div>
+  </div>
+
+  <div class="cmp-divider-label">What people criticise</div>
+  <div class="chart-card half">
+    <div class="chart-header"><h3 class="chart-title">Reddit — What People Criticise</h3><p class="chart-subtitle">Top phrases in negative Reddit comments</p></div>
+    <div id="cmp-reddit-kwNeg" class="kw-list"></div>
+  </div>
+  <div class="chart-card half">
+    <div class="chart-header"><h3 class="chart-title">YouTube — What They Criticise</h3><p class="chart-subtitle">Top phrases in negative YouTube comments</p></div>
+    <div id="cmp-yt-kwNeg" class="kw-list"></div>
+  </div>
+
+  <!-- ── AI DEEP DIVE DESCRIPTIONS ──────────────────────────────── -->
+  {% if insights_all and insights_all.gemini_insights %}
+  {% set gi = insights_all.gemini_insights %}
+  <div class="cmp-divider-label">AI-generated platform insights</div>
+
+  {% if gi.engagement %}
+  <div class="chart-card full" style="gap:6px;">
+    <div class="chart-question">Do positive comments get more upvotes on Reddit vs likes on YouTube?</div>
+    <p class="chart-gemini-desc">{{ gi.engagement }}</p>
   </div>
   {% endif %}
 
-
-  <!-- ── KEY TAKEAWAYS PANEL ───────────────────────────────── -->
-  {% if insights_data and insights_data.takeaways %}
-  {% set tw = insights_data.takeaways %}
-  <div class="takeaways-panel">
-    <p class="takeaways-title">Key Takeaways</p>
-    <div class="takeaways-grid">
-
-      <div class="takeaway-stat">
-        <div class="takeaway-stat-label">Positive Sentiment</div>
-        <div class="takeaway-stat-value pos">{{ tw.pos_pct }}%</div>
-      </div>
-
-      <div class="takeaway-stat">
-        <div class="takeaway-stat-label">Negative Sentiment</div>
-        <div class="takeaway-stat-value neg">{{ tw.neg_pct }}%</div>
-      </div>
-
-      <div class="takeaway-stat">
-        <div class="takeaway-stat-label">Neutral / Factual</div>
-        <div class="takeaway-stat-value neu">{{ tw.neu_pct }}%</div>
-      </div>
-
-      {% if tw.top_praised %}
-      <div class="takeaway-stat">
-        <div class="takeaway-stat-label">Most Praised</div>
-        <div class="takeaway-text-val pos-text">"{{ tw.top_praised }}"</div>
-      </div>
-      {% endif %}
-
-      {% if tw.top_criticised %}
-      <div class="takeaway-stat">
-        <div class="takeaway-stat-label">Most Criticised</div>
-        <div class="takeaway-text-val neg-text">"{{ tw.top_criticised }}"</div>
-      </div>
-      {% endif %}
-
-      <div class="takeaway-stat">
-        <div class="takeaway-stat-label">Community Division</div>
-        <div class="division-track">
-          <div class="division-fill" style="width:{{ tw.division_score }}%;"></div>
-        </div>
-        <div class="division-label">
-          <span>Consensus</span>
-          <span>{{ tw.division_score }}%</span>
-          <span>Divided</span>
-        </div>
-      </div>
-
-    </div>
-    {% if tw.most_debated %}
-    <div class="takeaway-debate-row">
-      <span class="takeaway-debate-label">Most Debated Post</span>
-      <span class="takeaway-debate-title">"{{ tw.most_debated }}"</span>
-    </div>
-    {% endif %}
+  {% if gi.volatility %}
+  <div class="chart-card full" style="gap:6px;">
+    <div class="chart-question">How much do opinions shift day to day?</div>
+    <p class="chart-gemini-desc">{{ gi.volatility }}</p>
   </div>
   {% endif %}
 
-
-  <!-- ── SECTION: WHAT PEOPLE ARE SAYING ───────────────────── -->
-  <div class="section-header">
-    <div class="section-header-inner">
-      <span class="section-title">What People Are Saying</span>
-      <span class="section-desc">Keywords extracted from thousands of comments — the actual topics driving each side of the discourse</span>
-    </div>
+  {% if gi.peak_hours %}
+  <div class="chart-card full" style="gap:6px;">
+    <div class="chart-question">When are people most active across platforms?</div>
+    <p class="chart-gemini-desc">{{ gi.peak_hours }}</p>
   </div>
+  {% endif %}
 
-  <div class="chart-card half">
-    <div class="chart-header">
-      <div>
-        <h3 class="chart-title">What People Love</h3>
-        <p class="chart-subtitle">Most frequent keywords in positive comments — these are the praised features and aspects</p>
-      </div>
-    </div>
-    <div class="chart-body"><canvas id="chartKwPos"></canvas></div>
+  {% if gi.community %}
+  <div class="chart-card full" style="gap:6px;">
+    <div class="chart-question">Which communities and videos lean which way?</div>
+    <p class="chart-gemini-desc">{{ gi.community }}</p>
   </div>
+  {% endif %}
+  {% endif %}
 
-  <div class="chart-card half">
-    <div class="chart-header">
-      <div>
-        <h3 class="chart-title">What People Criticise</h3>
-        <p class="chart-subtitle">Most frequent keywords in negative comments — these are the pain points and complaints</p>
-      </div>
-    </div>
-    <div class="chart-body"><canvas id="chartKwNeg"></canvas></div>
-  </div>
+</div><!-- /trends-container compare -->
+</div><!-- /panel-compare -->
+{% endif %}
 
-  <div class="chart-card full">
-    <div class="chart-header">
-      <div>
-        <h3 class="chart-title">What's Being Debated</h3>
-        <p class="chart-subtitle">Top discussed posts with their sentiment breakdown — a red-dominant bar means that post sparked controversy; green means it drew praise</p>
-      </div>
-    </div>
-    <div class="chart-body tall"><canvas id="chartDebate"></canvas></div>
-  </div>
-
-  <div class="chart-card full">
-    <div class="chart-header" style="display:flex; justify-content:space-between; align-items:flex-start;">
-      <div>
-        <h3 class="chart-title">Sentiment Momentum</h3>
-        <p class="chart-subtitle">7-day rolling average of net sentiment — a rising line means public opinion is improving; a falling line means it is worsening</p>
-      </div>
-      <div id="momentumBadge" style="flex-shrink:0; margin-left:16px;"></div>
-    </div>
-    <div class="chart-body"><canvas id="chartMomentum"></canvas></div>
-  </div>
-
-
-  <!-- ── SECTION 1: SENTIMENT OVERVIEW ─────────────────────── -->
-  <div class="section-header">
-    <div class="section-header-inner">
-      <span class="section-title">Sentiment Overview</span>
-      <span class="section-desc">Macro-level breakdown of public mood and AI confidence</span>
-    </div>
-  </div>
-
-  <!-- Chart 1: Overall Split (doughnut) -->
-  <div class="chart-card">
-    <div class="chart-header">
-      <div>
-        <h3 class="chart-title">Overall Sentiment Split</h3>
-        <p class="chart-subtitle">Immediate macro view — dominant red = widespread discontent, dominant green = broad approval</p>
-      </div>
-    </div>
-    <div class="chart-body"><canvas id="chart1"></canvas></div>
-  </div>
-
-  <!-- Chart 3: Avg Engagement by Sentiment (bar) -->
-  <div class="chart-card">
-    <div class="chart-header">
-      <div>
-        <h3 class="chart-title">Engagement by Emotion</h3>
-        <p class="chart-subtitle">Which type of content earns the most upvotes — if the red bar leads, outrage is being rewarded</p>
-      </div>
-    </div>
-    <div class="chart-body"><canvas id="chart3"></canvas></div>
-  </div>
-
-  <!-- Chart 11: AI Probability Baseline (radar) -->
-  <div class="chart-card">
-    <div class="chart-header">
-      <div>
-        <h3 class="chart-title">AI Confidence Baseline</h3>
-        <p class="chart-subtitle">Average model probability across all classes — reveals underlying language bias even in "neutral" posts</p>
-      </div>
-    </div>
-    <div class="chart-body"><canvas id="chart11"></canvas></div>
-  </div>
-
-
-  <!-- ── SECTION 2: TEMPORAL ANALYSIS ─────────────────────── -->
-  <div class="section-header">
-    <div class="section-header-inner">
-      <span class="section-title">Temporal Analysis</span>
-      <span class="section-desc">How sentiment evolved — spikes correlate directly to real-world events</span>
-    </div>
-  </div>
-
-  <!-- Chart 2: Timeline (full width) -->
-  <div class="chart-card full">
-    <div class="chart-header">
-      <div>
-        <h3 class="chart-title">Daily Sentiment Timeline</h3>
-        <p class="chart-subtitle">Day-by-day emotional breakdown — a sudden negative spike means a controversy broke exactly on that date</p>
-      </div>
-    </div>
-    <div class="chart-body tall"><canvas id="chart2"></canvas></div>
-  </div>
-
-  <!-- Charts 6, 9, 14 in a row -->
-  <div class="chart-card">
-    <div class="chart-header">
-      <div>
-        <h3 class="chart-title">Volatility Index</h3>
-        <p class="chart-subtitle">Daily emotional turbulence — high peaks indicate polarization and intense debate on that day</p>
-      </div>
-    </div>
-    <div class="chart-body"><canvas id="chart6"></canvas></div>
-  </div>
-
-  <div class="chart-card">
-    <div class="chart-header">
-      <div>
-        <h3 class="chart-title">Neutral (Factual) Flow</h3>
-        <p class="chart-subtitle">Daily volume of unbiased informational posts — separates factual discussion from emotional rhetoric</p>
-      </div>
-    </div>
-    <div class="chart-body"><canvas id="chart9"></canvas></div>
-  </div>
-
-  <div class="chart-card">
-    <div class="chart-header">
-      <div>
-        <h3 class="chart-title">Cumulative Discussion Growth</h3>
-        <p class="chart-subtitle">Running total of analyzed posts — steeper slope = more public momentum and interest over time</p>
-      </div>
-    </div>
-    <div class="chart-body"><canvas id="chart14"></canvas></div>
-  </div>
-
-
-  <!-- ── SECTION 3: INTENSITY & EMOTION DEPTH ─────────────── -->
-  <div class="section-header">
-    <div class="section-header-inner">
-      <span class="section-title">Intensity &amp; Emotion Depth</span>
-      <span class="section-desc">The difference between a mild opinion and a fiery conviction</span>
-    </div>
-  </div>
-
-  <!-- Charts 8, 7, 4 -->
-  <div class="chart-card">
-    <div class="chart-header">
-      <div>
-        <h3 class="chart-title">Enthusiasm Intensity</h3>
-        <p class="chart-subtitle">Distribution of positive comment confidence — 0.8–1.0 = fierce loyalty, not just mild agreement</p>
-      </div>
-    </div>
-    <div class="chart-body"><canvas id="chart8"></canvas></div>
-  </div>
-
-  <div class="chart-card">
-    <div class="chart-header">
-      <div>
-        <h3 class="chart-title">Toxicity Intensity</h3>
-        <p class="chart-subtitle">Distribution of negative comment confidence — 0.8–1.0 = intense outrage, not just mild criticism</p>
-      </div>
-    </div>
-    <div class="chart-body"><canvas id="chart7"></canvas></div>
-  </div>
-
-  <div class="chart-card">
-    <div class="chart-header">
-      <div>
-        <h3 class="chart-title">Positivity vs Virality</h3>
-        <p class="chart-subtitle">Dots clustered left (low positivity) but high up = the algorithm rewards outrage over optimism</p>
-      </div>
-    </div>
-    <div class="chart-body"><canvas id="chart4"></canvas></div>
-  </div>
-
-
-  <!-- ── SECTION 4: VIRALITY & ENGAGEMENT ─────────────────── -->
-  <div class="section-header">
-    <div class="section-header-inner">
-      <span class="section-title">Virality &amp; Engagement</span>
-      <span class="section-desc">What content the algorithm rewards and how attention is distributed across posts</span>
-    </div>
-  </div>
-
-  <!-- Chart 5: Top 10 (full width) -->
-  <div class="chart-card full">
-    <div class="chart-header">
-      <div>
-        <h3 class="chart-title">Top 10 Most Viral Posts</h3>
-        <p class="chart-subtitle">The tone of mega-viral posts sets the community's culture — are the loudest voices positive or toxic?</p>
-      </div>
-    </div>
-    <div class="chart-body"><canvas id="chart5"></canvas></div>
-  </div>
-
-  <!-- Charts 13, 12 (half each) -->
-  <div class="chart-card half">
-    <div class="chart-header">
-      <div>
-        <h3 class="chart-title">Viral Inequality Curve</h3>
-        <p class="chart-subtitle">Typically 95% of posts get under 10 upvotes while a tiny few monopolize all the algorithm's attention</p>
-      </div>
-    </div>
-    <div class="chart-body"><canvas id="chart13"></canvas></div>
-  </div>
-
-  <div class="chart-card half">
-    <div class="chart-header">
-      <div>
-        <h3 class="chart-title">Essay Length vs Positivity</h3>
-        <p class="chart-subtitle">Do long-form posts skew supportive or critical? Answers whether passionate writers are fans or critics</p>
-      </div>
-    </div>
-    <div class="chart-body"><canvas id="chart12"></canvas></div>
-  </div>
-
-
-  <!-- ── SECTION 5: BEHAVIORAL PATTERNS ───────────────────── -->
-  <div class="section-header">
-    <div class="section-header-inner">
-      <span class="section-title">Behavioral Patterns</span>
-      <span class="section-desc">When and how the community engages — temporal rhythms reveal audience demographics</span>
-    </div>
-  </div>
-
-  <!-- Chart 10, Chart 15 -->
-  <div class="chart-card">
-    <div class="chart-header">
-      <div>
-        <h3 class="chart-title">Peak Posting Hours (UTC)</h3>
-        <p class="chart-subtitle">When the community is most active — peak hours reveal the geographic and demographic makeup</p>
-      </div>
-    </div>
-    <div class="chart-body"><canvas id="chart10"></canvas></div>
-  </div>
-
-  <div class="chart-card two-thirds">
-    <div class="chart-header">
-      <div>
-        <h3 class="chart-title">Weekly Sentiment Rhythm</h3>
-        <p class="chart-subtitle">Are people angrier on Mondays? Weekly patterns expose cyclical emotional habits of the community</p>
-      </div>
-    </div>
-    <div class="chart-body"><canvas id="chart15"></canvas></div>
-  </div>
-
-</div><!-- .trends-container -->
+{% endif %}{# end has_data #}
 {% endif %}{# end job_status else #}
 {% endif %}{# end current_topic #}
 
@@ -614,531 +1065,937 @@
      ============================================================ -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-  const rawData = '{{ charts_data | safe }}';
-  if (!rawData || rawData === '{}') return;
-  const db = JSON.parse(rawData);
 
-  // Global defaults — dark glass theme
+// ── Data from server ──────────────────────────────────────────
+const chartsAllRaw     = {{ charts_all | safe }};
+const chartsRedditRaw  = {{ charts_data | safe }};
+const chartsYoutubeRaw = {{ charts_youtube | safe }};
+const insightsAll      = {{ insights_all | tojson }};
+const insightsReddit   = {{ insights_data | tojson }};
+const insightsYoutube  = {{ insights_youtube | tojson }};
+const hasYoutube       = {{ 'true' if has_youtube else 'false' }};
+
+// ── Color helpers (global) ────────────────────────────────────
+const EMO = {
+  positive: { fill: 'rgba(16,185,129,0.75)',  solid: '#10b981', area: 'rgba(16,185,129,0.12)' },
+  negative: { fill: 'rgba(239,68,68,0.75)',   solid: '#ef4444', area: 'rgba(239,68,68,0.12)'  },
+  neutral:  { fill: 'rgba(100,116,139,0.5)',  solid: '#6b7280', area: 'rgba(100,116,139,0.12)'},
+};
+const eColor = l => (EMO[l.toLowerCase()] || EMO.neutral).fill;
+const eSolid = l => (EMO[l.toLowerCase()] || EMO.neutral).solid;
+const eArea  = l => (EMO[l.toLowerCase()] || EMO.neutral).area;
+const C = {
+  pos: 'rgba(16,185,129,0.75)', posSolid: '#10b981', posArea: 'rgba(16,185,129,0.12)',
+  neg: 'rgba(239,68,68,0.75)',  negSolid: '#ef4444', negArea: 'rgba(239,68,68,0.12)',
+  neu: 'rgba(100,116,139,0.5)', neuSolid: '#6b7280', neuArea: 'rgba(100,116,139,0.12)',
+  purple: 'rgba(168,85,247,0.7)', purpleSolid: '#a855f7',
+  cyan: 'rgba(0,242,254,0.75)', cyanSolid: '#00f2fe',
+  yellow: 'rgba(245,158,11,0.75)', yellowSolid: '#f59e0b',
+};
+
+// ── Shared UI helpers ─────────────────────────────────────────
+
+function renderKwCards(kwData, containerId, accentColor, borderColor) {
+  const el = document.getElementById(containerId);
+  if (!el || !kwData?.labels?.length) return;
+  const upIcon  = `<svg class="rc-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M10 3l7 7h-4v7H7v-7H3l7-7z"/></svg>`;
+  const cmtIcon = `<svg class="rc-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M2 5a2 2 0 012-2h12a2 2 0 012 2v7a2 2 0 01-2 2H6l-4 4V5z"/></svg>`;
+  el.innerHTML = kwData.labels.slice(0, 5).map((phrase, i) => {
+    const count  = kwData.values?.[i]     ?? 0;
+    const quote  = kwData.quotes?.[i]     || null;
+    const score  = kwData.scores?.[i]     ?? null;
+    const sub    = kwData.subreddits?.[i] || null;
+    const author = kwData.authors?.[i]    || null;
+    const title  = kwData.titles?.[i]     || null;
+    const subTag    = sub    ? `<a class="rc-sub">r/${sub}</a>` : '';
+    const authorTag = author ? `<span class="rc-author">u/${author}</span>` : '';
+    const titleTag  = title  ? `<div class="rc-title">${title}</div>` : '';
+    const quoteTag  = quote  ? `<div class="rc-body">${quote}</div>` : '';
+    const scoreVal  = score !== null ? score : '—';
+    return `<div class="rc-card" style="--rc-accent:${accentColor};--rc-border:${borderColor}">
+      <div class="rc-vote">${upIcon}<span class="rc-score">${scoreVal}</span></div>
+      <div class="rc-content">
+        <div class="rc-meta">${subTag}${authorTag}</div>
+        ${titleTag}${quoteTag}
+        <div class="rc-footer">
+          <span class="rc-tag" style="background:${accentColor}22;color:${accentColor}">${phrase}</span>
+          <span class="rc-mention">${cmtIcon} ${count} mention${count !== 1 ? 's' : ''}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderYtKwCards(kwData, containerId, accentColor, borderColor) {
+  const el = document.getElementById(containerId);
+  if (!el || !kwData?.labels?.length) return;
+  const upIcon  = `<svg viewBox="0 0 24 24" fill="none" stroke="${accentColor}" stroke-width="2.5" width="14" height="14"><path d="M12 19V6M5 12l7-7 7 7"/></svg>`;
+  const cmtIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
+  el.innerHTML = kwData.labels.map((phrase, i) => {
+    const count    = kwData.values?.[i] || 0;
+    const quote    = kwData.quotes?.[i] || null;
+    const quoteTag = quote ? `<div class="rc-quote">"${quote}"</div>` : '';
+    return `<div class="rc-card" style="--rc-accent:${accentColor};--rc-border:${borderColor}">
+      <div class="rc-vote">${upIcon}<span class="rc-score">${count}</span></div>
+      <div class="rc-content">
+        <div class="rc-meta"><span class="platform-badge yt-badge" style="font-size:0.65rem">YouTube</span></div>
+        ${quoteTag}
+        <div class="rc-footer">
+          <span class="rc-tag" style="background:${accentColor}22;color:${accentColor}">${phrase}</span>
+          <span class="rc-mention">${cmtIcon} ${count} mention${count !== 1 ? 's' : ''}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderDebateCards(containerId, labels, posArr, negArr, neuArr, keywords, totals) {
+  const el = document.getElementById(containerId);
+  if (!el || !labels?.length) return;
+  el.innerHTML = labels.map((title, i) => {
+    const pos   = Math.round(posArr ? (posArr[i] || 0) : 0);
+    const neg   = Math.round(negArr ? (negArr[i] || 0) : 0);
+    const neu   = Math.round(neuArr ? (neuArr[i] || 0) : 0);
+    const total = totals ? (totals[i] || 0) : 0;
+    const dom   = pos >= neg && pos >= neu ? 'positive' : neg > pos && neg >= neu ? 'negative' : 'neutral';
+    const kws   = keywords?.[i]?.length ? keywords[i].map(k => `<span class="debate-kw-tag">${k}</span>`).join('') : '';
+    const kwRow    = kws ? `<div class="debate-kw-row">Being discussed: ${kws}</div>` : '';
+    const totalStr = total ? `<span class="yt-sent-count">${total.toLocaleString()} comments</span>` : '';
+    const neuRow   = neu > 0 ? `<span class="yt-sent-pct neu-pct">— ${neu}% Neutral</span>` : '';
+    return `<div class="yt-sent-row">
+      <div class="yt-sent-row-header">
+        <span class="yt-sent-title" title="${title.replace(/"/g,'&quot;')}">${title}</span>
+        <div class="yt-sent-meta">
+          <span class="yt-sent-pill yt-sent-pill-${dom}">${dom.charAt(0).toUpperCase()+dom.slice(1)}</span>
+          ${totalStr}
+        </div>
+      </div>
+      ${kwRow}
+      <div class="yt-sent-bar-track">
+        <div class="yt-sent-seg" style="width:${pos}%;background:#10b981"></div>
+        <div class="yt-sent-seg" style="width:${neg}%;background:#ef4444"></div>
+        <div class="yt-sent-seg" style="width:${neu}%;background:#6b7280"></div>
+      </div>
+      <div class="yt-sent-pcts">
+        <span class="yt-sent-pct pos-pct">▲ ${pos}% Positive</span>
+        <span class="yt-sent-pct neg-pct">▼ ${neg}% Negative</span>
+        ${neuRow}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderSentimentRowsWithThumbs(containerId, labels, posArr, negArr, neuArr, totals, sourceIds) {
+  const el = document.getElementById(containerId);
+  if (!el || !labels?.length) return;
+  el.innerHTML = labels.map((title, i) => {
+    const pos   = Math.round(posArr?.[i] || 0);
+    const neg   = Math.round(negArr?.[i] || 0);
+    const neu   = Math.round(neuArr?.[i] || 0);
+    const total = totals?.[i] || 0;
+    const vidId = sourceIds?.[i] || '';
+    const dom   = pos >= neg && pos >= neu ? 'positive' : neg > pos && neg >= neu ? 'negative' : 'neutral';
+    const totalStr = total ? `<span class="yt-sent-count">${total.toLocaleString()} comments</span>` : '';
+    const neuRow   = neu > 0 ? `<span class="yt-sent-pct neu-pct">— ${neu}% Neutral</span>` : '';
+    const thumbHtml = vidId
+      ? `<a href="https://www.youtube.com/watch?v=${vidId}" target="_blank" rel="noopener" class="yt-sent-thumb-link">
+           <img src="https://img.youtube.com/vi/${vidId}/mqdefault.jpg" class="yt-sent-thumb" loading="lazy" alt="">
+           <div class="yt-sent-play">▶</div>
+         </a>` : '';
+    return `<div class="yt-sent-row yt-sent-row-media${vidId ? ' has-thumb' : ''}">
+      ${thumbHtml}
+      <div class="yt-sent-row-body">
+        <div class="yt-sent-row-header">
+          <span class="yt-sent-title" title="${title.replace(/"/g,'&quot;')}">${title}</span>
+          <div class="yt-sent-meta">
+            <span class="yt-sent-pill yt-sent-pill-${dom}">${dom.charAt(0).toUpperCase()+dom.slice(1)}</span>
+            ${totalStr}
+          </div>
+        </div>
+        <div class="yt-sent-bar-track">
+          <div class="yt-sent-seg" style="width:${pos}%;background:#10b981"></div>
+          <div class="yt-sent-seg" style="width:${neg}%;background:#ef4444"></div>
+          <div class="yt-sent-seg" style="width:${neu}%;background:#6b7280"></div>
+        </div>
+        <div class="yt-sent-pcts">
+          <span class="yt-sent-pct pos-pct">▲ ${pos}% Positive</span>
+          <span class="yt-sent-pct neg-pct">▼ ${neg}% Negative</span>
+          ${neuRow}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderTop10Cards(containerId, chart5Data) {
+  const el = document.getElementById(containerId);
+  if (!el || !chart5Data?.posts?.length) return;
+  const SENT_COLOR  = { Positive:'#10b981', Negative:'#ef4444', Neutral:'#6b7280' };
+  const SENT_BG     = { Positive:'rgba(16,185,129,0.12)', Negative:'rgba(239,68,68,0.12)', Neutral:'rgba(100,116,139,0.12)' };
+  const SENT_BORDER = { Positive:'rgba(16,185,129,0.3)',  Negative:'rgba(239,68,68,0.3)',  Neutral:'rgba(100,116,139,0.3)'  };
+  el.innerHTML = chart5Data.posts.map((post, idx) => {
+    const sent = post.sentiment || 'Neutral';
+    const col  = SENT_COLOR[sent] || '#6b7280';
+    const bg   = SENT_BG[sent]    || 'rgba(100,116,139,0.12)';
+    const bord = SENT_BORDER[sent]|| 'rgba(100,116,139,0.3)';
+    const sub  = post.source_id ? `<span class="platform-badge reddit-badge">r/${post.source_id}</span>` : '';
+    return `<div class="top10-post-card">
+      <div class="top10-rank" style="color:${col}">#${idx+1}</div>
+      <div class="top10-body">
+        <p class="top10-title">${post.title}</p>
+        <div class="top10-meta">
+          ${sub}
+          <span class="top10-pill" style="background:${bg};color:${col};border:1px solid ${bord}">${sent}</span>
+        </div>
+      </div>
+      <div class="top10-score">
+        <span class="top10-score-num" style="color:${col}">▲ ${post.score.toLocaleString()}</span>
+        <span class="top10-score-lbl">upvotes</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderMomentumChart(canvasId, badgeId, momentumData) {
+  if (!momentumData?.labels?.length) return;
+  const up = momentumData.direction === 'improving';
+  const badge = document.getElementById(badgeId);
+  if (badge) badge.innerHTML = `<span style="padding:5px 14px;border-radius:20px;font-size:0.75rem;font-weight:700;background:${up?'rgba(16,185,129,0.15)':'rgba(239,68,68,0.15)'};color:${up?'#10b981':'#ef4444'};border:1px solid ${up?'rgba(16,185,129,0.4)':'rgba(239,68,68,0.4)'};">${up?'Opinion Improving ↑':'Opinion Declining ↓'}</span>`;
+  new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: { labels: momentumData.labels, datasets: [{ label: '7-day Rolling Net Sentiment', data: momentumData.values,
+      borderColor: up ? '#10b981' : '#ef4444', backgroundColor: up ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)',
+      fill: true, tension: 0.4, borderWidth: 2.5, pointRadius: 0 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.04)' } } } }
+  });
+}
+
+function renderDonut(canvasId, chart1Data) {
+  if (!chart1Data) return;
+  new Chart(document.getElementById(canvasId), {
+    type: 'doughnut',
+    data: { labels: chart1Data.labels, datasets: [{ data: chart1Data.values,
+      backgroundColor: chart1Data.labels.map(eColor),
+      borderColor: 'rgba(11,15,25,1)', borderWidth: 3, hoverOffset: 8 }] },
+    options: { responsive: true, maintainAspectRatio: false, cutout: '68%',
+      plugins: { legend: { position: 'bottom', labels: { padding: 20, usePointStyle: true } } } }
+  });
+}
+
+function renderTimeline(canvasId, chart2Data) {
+  if (!chart2Data) return;
+  const ds = chart2Data.datasets;
+  new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: { labels: chart2Data.labels, datasets: Object.keys(ds).map(k => ({
+      label: k.charAt(0).toUpperCase()+k.slice(1), data: ds[k],
+      borderColor: eSolid(k), backgroundColor: eArea(k),
+      tension: 0.4, fill: true, borderWidth: 2, pointRadius: 2, pointHoverRadius: 5
+    })) },
+    options: { responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'top' } },
+      scales: { x: { ticks: { maxTicksLimit: 8 } }, y: { beginAtZero: true } } }
+  });
+}
+
+// ── Deep dive chart renderers (shared) ────────────────────────
+
+function renderChart3(canvasId, db) {
+  if (!db?.chart3_avg_upvotes_sentiment) return;
+  const d = db.chart3_avg_upvotes_sentiment;
+  new Chart(document.getElementById(canvasId), {
+    type: 'bar',
+    data: { labels: d.labels, datasets: [{ label: 'Avg Score', data: d.values,
+      backgroundColor: d.labels.map(eColor), borderColor: d.labels.map(eSolid),
+      borderWidth: 1, borderRadius: 8, borderSkipped: false }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+}
+
+function renderChart4(canvasId, db) {
+  if (!db?.chart4_sentiment_vs_engagement?.data) return;
+  new Chart(document.getElementById(canvasId), {
+    type: 'scatter',
+    data: { datasets: [{ label: 'Posts', data: db.chart4_sentiment_vs_engagement.data,
+      backgroundColor: C.purple, pointRadius: 3, pointHoverRadius: 6 }] },
+    options: { responsive: true, maintainAspectRatio: false,
+      scales: { x: { title: { display: true, text: 'Positivity Score (0–1)' } },
+                y: { title: { display: true, text: 'Score' }, type: 'logarithmic' } } }
+  });
+}
+
+function renderChart6(canvasId, db) {
+  if (!db?.chart6_sentiment_volatility) return;
+  new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: { labels: db.chart6_sentiment_volatility.labels, datasets: [{ label: 'Volatility',
+      data: db.chart6_sentiment_volatility.values, borderColor: C.yellowSolid,
+      backgroundColor: 'rgba(245,158,11,0.15)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 0 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+}
+
+function renderChart7(canvasId, db) {
+  if (!db?.chart7_negative_intensity) return;
+  new Chart(document.getElementById(canvasId), {
+    type: 'bar',
+    data: { labels: db.chart7_negative_intensity.labels, datasets: [{ label: 'Count',
+      data: db.chart7_negative_intensity.values,
+      backgroundColor: ['rgba(239,68,68,0.35)','rgba(239,68,68,0.50)','rgba(239,68,68,0.65)','rgba(239,68,68,0.80)','rgba(239,68,68,1)'],
+      borderColor: C.negSolid, borderWidth: 1, borderRadius: 6 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+}
+
+function renderChart8(canvasId, db) {
+  if (!db?.chart8_positive_intensity) return;
+  new Chart(document.getElementById(canvasId), {
+    type: 'bar',
+    data: { labels: db.chart8_positive_intensity.labels, datasets: [{ label: 'Count',
+      data: db.chart8_positive_intensity.values,
+      backgroundColor: ['rgba(16,185,129,0.35)','rgba(16,185,129,0.50)','rgba(16,185,129,0.65)','rgba(16,185,129,0.80)','rgba(16,185,129,1)'],
+      borderColor: C.posSolid, borderWidth: 1, borderRadius: 6 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+}
+
+function renderChart10(canvasId, db) {
+  if (!db?.chart10_volume_by_hour) return;
+  new Chart(document.getElementById(canvasId), {
+    type: 'bar',
+    data: { labels: db.chart10_volume_by_hour.labels, datasets: [{ label: 'Posts',
+      data: db.chart10_volume_by_hour.values, backgroundColor: C.purple, borderColor: C.purpleSolid,
+      borderWidth: 1, borderRadius: 3 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+}
+
+function renderChart12(canvasId, db) {
+  if (!db?.chart12_text_length_vs_sentiment?.data) return;
+  new Chart(document.getElementById(canvasId), {
+    type: 'scatter',
+    data: { datasets: [{ label: 'Posts', data: db.chart12_text_length_vs_sentiment.data,
+      backgroundColor: C.neu, pointRadius: 3, pointHoverRadius: 6 }] },
+    options: { responsive: true, maintainAspectRatio: false,
+      scales: { x: { title: { display: true, text: 'Character Length' } },
+                y: { title: { display: true, text: 'Positivity Score' }, min: 0, max: 1 } } }
+  });
+}
+
+function renderChart13(canvasId, db) {
+  if (!db?.chart13_score_distribution) return;
+  new Chart(document.getElementById(canvasId), {
+    type: 'bar',
+    data: { labels: db.chart13_score_distribution.labels, datasets: [{ label: 'Posts',
+      data: db.chart13_score_distribution.values, backgroundColor: C.yellow,
+      borderColor: C.yellowSolid, borderWidth: 1, borderRadius: 6 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+}
+
+function renderChart14(canvasId, db) {
+  if (!db?.chart14_cumulative_posts) return;
+  new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: { labels: db.chart14_cumulative_posts.labels, datasets: [{ label: 'Total Comments',
+      data: db.chart14_cumulative_posts.values, borderColor: C.posSolid, backgroundColor: C.posArea,
+      fill: true, tension: 0.1, borderWidth: 2, pointRadius: 0 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+}
+
+function renderChart15(canvasId, db) {
+  if (!db?.chart15_sentiment_by_day) return;
+  const ds = db.chart15_sentiment_by_day.datasets;
+  new Chart(document.getElementById(canvasId), {
+    type: 'bar',
+    data: { labels: db.chart15_sentiment_by_day.labels, datasets: Object.keys(ds).map(k => ({
+      label: k.charAt(0).toUpperCase()+k.slice(1), data: ds[k],
+      backgroundColor: eColor(k), borderColor: eSolid(k), borderWidth: 1, borderRadius: 4
+    })) },
+    options: { responsive: true, maintainAspectRatio: false,
+      scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
+      plugins: { legend: { position: 'top' } } }
+  });
+}
+
+function renderChart17(canvasId, db) {
+  if (!db?.chart17_community_breakdown?.labels?.length) return;
+  const cb = db.chart17_community_breakdown;
+  new Chart(document.getElementById(canvasId), {
+    type: 'bar',
+    data: { labels: cb.labels, datasets: ['Positive','Negative','Neutral']
+      .filter(e => cb.datasets[e] !== undefined)
+      .map(e => ({ label: e, data: cb.datasets[e], backgroundColor: eColor(e), borderColor: eSolid(e), borderWidth: 1, borderRadius: 3 })) },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      scales: { x: { stacked: true, beginAtZero: true, max: 100, ticks: { callback: v => v+'%' } }, y: { stacked: true } },
+      plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.x}%` } } } }
+  });
+}
+
+// ── Deep dive lazy init ───────────────────────────────────────
+// ── Deep Dive: background prefetch ────────────────────────────
+let _deepDiveData     = null;   // cached AJAX response (all sources)
+let _deepDivePromise  = null;   // in-flight or resolved Promise
+const _deepDiveRendered = { all: false, reddit: false, youtube: false };
+
+// Gemini key mapping: canvas suffix → response key
+const _GEMINI_KEY = {
+  chart3: 'engagement', chart4: 'scatter',   chart6: 'volatility',
+  chart7: 'neg_intensity', chart8: 'pos_intensity', chart10: 'peak_hours',
+  chart12: 'text_length', chart13: 'score_dist', chart14: 'cumulative',
+  chart15: 'weekly', chart17: 'community'
+};
+
+document.addEventListener('DOMContentLoaded', function () {
+  const el = document.querySelector('[data-topic-id]');
+  if (!el || !el.dataset.topicId) return;
+
+  const fd = new FormData();
+  fd.append('topic_id',   el.dataset.topicId);
+  fd.append('topic_name', el.dataset.topicName || '');
+
+  _deepDivePromise = fetch('/trends/deep-dive', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      _deepDiveData = data;
+      _injectGeminiText(data.gemini_all    || data.gemini || {}, 'all');
+      _injectGeminiText(data.gemini_reddit || data.gemini || {}, 'reddit');
+      _injectGeminiText(data.gemini_youtube|| data.gemini || {}, 'youtube');
+      return data;
+    })
+    .catch(err => { console.warn('[deep-dive] prefetch failed:', err); return null; });
+});
+
+function toggleDeepDive(btn, panelId) {
+  const body   = btn.nextElementSibling;
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : '';
+  btn.querySelector('.dd-icon').textContent = isOpen ? '▶' : '▼';
+
+  if (isOpen || _deepDiveRendered[panelId]) return;
+
+  if (_deepDiveData) {
+    // Background fetch already done — render instantly
+    _deepDiveRendered[panelId] = true;
+    requestAnimationFrame(() => _initDeepDiveFromData(panelId, _deepDiveData));
+    return;
+  }
+
+  // Still fetching — show progress bar, then render when promise resolves
+  const loadingEl    = body.querySelector('.dd-loading');
+  const chartsGridEl = body.querySelector('.dd-charts-grid');
+  if (loadingEl)    { loadingEl.style.display = ''; _animateLoadingBar(loadingEl); }
+  if (chartsGridEl)   chartsGridEl.style.display = 'none';
+
+  (_deepDivePromise || Promise.resolve(null)).then(data => {
+    if (loadingEl)    loadingEl.style.display = 'none';
+    if (chartsGridEl) chartsGridEl.style.display = '';
+    if (data) {
+      _deepDiveRendered[panelId] = true;
+      requestAnimationFrame(() => _initDeepDiveFromData(panelId, data));
+    } else if (loadingEl) {
+      loadingEl.innerHTML = '<p class="dd-loading-text" style="color:#f87171">Could not load analytics. <button onclick="location.reload()" style="margin-left:8px;cursor:pointer;background:transparent;border:1px solid #f87171;color:#f87171;padding:3px 10px;border-radius:4px;font-size:0.78rem;">Retry</button></p>';
+      loadingEl.style.display = '';
+    }
+  });
+}
+
+function _animateLoadingBar(loadingEl) {
+  const bar = loadingEl.querySelector('.dd-loading-bar');
+  if (!bar) return;
+  bar.style.width = '0%';
+  bar.style.transition = 'none';
+  void bar.offsetWidth;
+  bar.style.transition = 'width 2.5s ease-out';
+  bar.style.width = '85%';
+}
+
+function _initDeepDiveFromData(panelId, data) {
+  const db = panelId === 'all' ? data.charts_all
+           : panelId === 'reddit' ? data.charts_reddit
+           : data.charts_youtube;
+  if (!db) return;
+  const p = panelId === 'youtube' ? 'yt' : panelId;
+  renderChart3(`${p}-chart3`, db);
+  renderChart4(`${p}-chart4`, db);
+  renderChart6(`${p}-chart6`, db);
+  renderChart7(`${p}-chart7`, db);
+  renderChart8(`${p}-chart8`, db);
+  renderChart10(`${p}-chart10`, db);
+  renderChart12(`${p}-chart12`, db);
+  renderChart13(`${p}-chart13`, db);
+  renderChart14(`${p}-chart14`, db);
+  renderChart15(`${p}-chart15`, db);
+  renderChart17(`${p}-chart17`, db);
+
+  // Inject Gemini descriptions into chart cards (use source-specific gemini)
+  const gemini = (p === 'all' ? data.gemini_all : p === 'reddit' ? data.gemini_reddit : data.gemini_youtube) || data.gemini || {};
+  document.querySelectorAll(`.chart-gemini-desc[data-canvas^="${p}-"]`).forEach(el => {
+    const suffix = el.dataset.canvas.replace(/^(all|reddit|yt)-/, '');
+    const key = _GEMINI_KEY[suffix];
+    if (key && gemini[key]) { el.textContent = gemini[key]; el.style.display = ''; }
+  });
+}
+
+function _injectGeminiText(gemini, tab) {
+  if (!gemini) return;
+  // Scope all updates to the correct tab panel
+  const panelId = tab === 'youtube' ? 'youtube' : tab === 'reddit' ? 'reddit' : 'all';
+  const panel = document.getElementById('panel-' + panelId);
+  if (!panel) return;
+  // Summary card
+  const summCard = panel.querySelector('.gemini-summary-card');
+  if (summCard) {
+    const p = summCard.querySelector('.gemini-summary-text');
+    if (p && gemini.summary) { p.textContent = gemini.summary; summCard.style.display = ''; }
+  }
+  // Keyword AI overviews
+  panel.querySelectorAll('.kw-ai-overview.pos').forEach(el => {
+    const p = el.querySelector('.kw-ai-text');
+    if (p && gemini.keyword_love) { p.textContent = gemini.keyword_love; el.style.display = ''; }
+  });
+  panel.querySelectorAll('.kw-ai-overview.neg').forEach(el => {
+    const p = el.querySelector('.kw-ai-text');
+    if (p && gemini.keyword_criticise) { p.textContent = gemini.keyword_criticise; el.style.display = ''; }
+  });
+  // Momentum blurb (volatility key explains trend direction)
+  const momEl = panel.querySelector('.gemini-momentum-desc');
+  if (momEl && gemini.volatility) { momEl.textContent = gemini.volatility; momEl.style.display = ''; }
+  // Platform compare blurb (community key explains platform differences)
+  const platEl = panel.querySelector('.gemini-platform-desc');
+  if (platEl && gemini.community) { platEl.textContent = gemini.community; platEl.style.display = ''; }
+  // Debate summary (above debate cards)
+  const debateEl = panel.querySelector('.gemini-debate-summary');
+  if (debateEl && gemini.debate_summary) { debateEl.textContent = gemini.debate_summary; debateEl.style.display = ''; }
+  // Viral posts (above top-posts cards)
+  const viralEl = panel.querySelector('.gemini-viral-posts');
+  if (viralEl && gemini.viral_posts) { viralEl.textContent = gemini.viral_posts; viralEl.style.display = ''; }
+  // Global placeholders — only inject once, from the 'all' tab
+  if (tab === 'all') {
+    const ctxBar = document.getElementById('gemini-topic-context-bar');
+    const ctxTxt = document.getElementById('gemini-topic-context-text');
+    if (ctxBar && ctxTxt && gemini.topic_context) {
+      ctxTxt.textContent = gemini.topic_context;
+      ctxBar.style.display = '';
+    }
+    const psiEl = document.getElementById('gemini-psi-meaning');
+    if (psiEl && gemini.psi_meaning) { psiEl.textContent = gemini.psi_meaning; psiEl.style.display = ''; }
+  }
+}
+
+// ── Platform panel init ───────────────────────────────────────
+
+function initAllCharts() {
+  if (!chartsAllRaw || !Object.keys(chartsAllRaw).length) return;
+  const db = chartsAllRaw;
+
+  renderDonut('all-chart1', db.chart1_overall_sentiment);
+  renderTimeline('all-chart2', db.chart2_sentiment_timeline);
+  renderMomentumChart('all-momentum', 'all-momentum-badge', insightsAll?.sentiment_momentum);
+
+  // Platform comparison (only when YouTube exists)
+  if (hasYoutube && insightsReddit?.takeaways && insightsYoutube?.takeaways) {
+    const rt = insightsReddit.takeaways;
+    const yt = insightsYoutube.takeaways;
+    new Chart(document.getElementById('all-platform-compare'), {
+      type: 'bar',
+      data: { labels: ['Positive', 'Negative'],
+        datasets: [
+          { label: 'Reddit',  data: [rt.pos_pct, rt.neg_pct], backgroundColor: ['rgba(16,185,129,0.75)','rgba(239,68,68,0.75)'], borderColor: ['#10b981','#ef4444'], borderWidth: 1, borderRadius: 6 },
+          { label: 'YouTube', data: [yt.pos_pct, yt.neg_pct], backgroundColor: ['rgba(16,185,129,0.3)','rgba(239,68,68,0.3)'],  borderColor: ['#10b981','#ef4444'], borderWidth: 1, borderRadius: 6 },
+        ] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } },
+        scales: { y: { beginAtZero: true, max: 100, ticks: { callback: v => v+'%' } } } }
+    });
+  }
+
+  const ins = insightsAll || {};
+  renderKwCards(ins.keyword_split?.positive, 'all-kwPos', '#10b981', '#065f46');
+  renderKwCards(ins.keyword_split?.negative, 'all-kwNeg', '#ef4444', '#7f1d1d');
+
+  if (ins.post_title_debate?.labels?.length) {
+    const d = ins.post_title_debate;
+    renderDebateCards('all-debateCards', d.labels, d.datasets?.Positive||[], d.datasets?.Negative||[], d.datasets?.Neutral||[], d.keywords, d.totals||[]);
+  }
+
+  renderTop10Cards('all-top10Cards', db.chart5_top_10_posts);
+}
+
+function initRedditCharts() {
+  if (!chartsRedditRaw || !Object.keys(chartsRedditRaw).length) return;
+  const db = chartsRedditRaw;
+
+  renderDonut('reddit-chart1', db.chart1_overall_sentiment);
+  renderTimeline('reddit-chart2', db.chart2_sentiment_timeline);
+  renderMomentumChart('reddit-momentum', 'reddit-momentum-badge', insightsReddit?.sentiment_momentum);
+
+  const ins = insightsReddit || {};
+  renderKwCards(ins.keyword_split?.positive, 'reddit-kwPos', '#10b981', '#065f46');
+  renderKwCards(ins.keyword_split?.negative, 'reddit-kwNeg', '#ef4444', '#7f1d1d');
+
+  if (ins.post_title_debate?.labels?.length) {
+    const d = ins.post_title_debate;
+    renderDebateCards('reddit-debateCards', d.labels, d.datasets?.Positive||[], d.datasets?.Negative||[], d.datasets?.Neutral||[], d.keywords, d.totals||[]);
+  }
+
+  renderTop10Cards('reddit-top10Cards', db.chart5_top_10_posts);
+}
+
+function initYouTubeCharts() {
+  if (!chartsYoutubeRaw || !Object.keys(chartsYoutubeRaw).length) return;
+  const db = chartsYoutubeRaw;
+
+  renderDonut('yt-chart1', db.chart1_overall_sentiment);
+  renderTimeline('yt-chart2', db.chart2_sentiment_timeline);
+  renderMomentumChart('yt-momentum', 'yt-momentum-badge', insightsYoutube?.sentiment_momentum);
+
+  const ins = insightsYoutube || {};
+  renderYtKwCards(ins.keyword_split?.positive, 'yt-kwPos', '#10b981', '#065f46');
+  renderYtKwCards(ins.keyword_split?.negative, 'yt-kwNeg', '#ef4444', '#7f1d1d');
+
+  if (ins.post_title_debate?.labels?.length) {
+    const d = ins.post_title_debate;
+    renderDebateCards('yt-debateCards', d.labels, d.datasets?.Positive||[], d.datasets?.Negative||[], d.datasets?.Neutral||[], d.keywords, d.totals||[]);
+  }
+
+  const cb = db.chart17_community_breakdown;
+  if (cb?.labels?.length) {
+    renderSentimentRowsWithThumbs('yt-sentByVideoCards', cb.labels,
+      cb.datasets?.Positive||[], cb.datasets?.Negative||[], cb.datasets?.Neutral||[],
+      cb.totals, cb.source_ids||[]);
+  }
+}
+
+// ── Compare Platforms charts ──────────────────────────────────
+
+function initCompareCharts() {
+  const dbR = chartsRedditRaw  || {};
+  const dbY = chartsYoutubeRaw || {};
+
+  // Donuts
+  renderDonut('cmp-reddit-chart1', dbR.chart1_overall_sentiment);
+  renderDonut('cmp-yt-chart1',     dbY.chart1_overall_sentiment);
+
+  // Timelines
+  renderTimeline('cmp-reddit-chart2', dbR.chart2_sentiment_timeline);
+  renderTimeline('cmp-yt-chart2',     dbY.chart2_sentiment_timeline);
+
+  // Head-to-head grouped bar
+  const rt = insightsReddit?.takeaways;
+  const yt = insightsYoutube?.takeaways;
+  if (rt && yt) {
+    const h2hEl = document.getElementById('cmp-h2h');
+    if (h2hEl) {
+      new Chart(h2hEl, {
+        type: 'bar',
+        data: {
+          labels: ['Positive', 'Negative', 'Neutral'],
+          datasets: [
+            {
+              label: 'Reddit',
+              data: [rt.pos_pct, rt.neg_pct, 100 - rt.pos_pct - rt.neg_pct],
+              backgroundColor: [C.pos, C.neg, C.neu],
+              borderColor: [C.posSolid, C.negSolid, C.neuSolid],
+              borderWidth: 1,
+              borderRadius: 6,
+            },
+            {
+              label: 'YouTube',
+              data: [yt.pos_pct, yt.neg_pct, 100 - yt.pos_pct - yt.neg_pct],
+              backgroundColor: ['rgba(16,185,129,0.35)', 'rgba(239,68,68,0.35)', 'rgba(100,116,139,0.35)'],
+              borderColor: [C.posSolid, C.negSolid, C.neuSolid],
+              borderWidth: 1,
+              borderRadius: 6,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'top' } },
+          scales: {
+            y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } },
+          },
+        },
+      });
+    }
+  }
+
+  // Keyword cards
+  const insR = insightsReddit || {};
+  const insY = insightsYoutube || {};
+  renderKwCards(insR.keyword_split?.positive, 'cmp-reddit-kwPos', '#10b981', '#065f46');
+  renderKwCards(insR.keyword_split?.negative, 'cmp-reddit-kwNeg', '#ef4444', '#7f1d1d');
+  renderYtKwCards(insY.keyword_split?.positive, 'cmp-yt-kwPos', '#10b981', '#065f46');
+  renderYtKwCards(insY.keyword_split?.negative, 'cmp-yt-kwNeg', '#ef4444', '#7f1d1d');
+}
+
+// ── Platform switcher ─────────────────────────────────────────
+const _panelRendered  = { all: false, reddit: false, youtube: false, compare: false };
+const _panelPreloading = { reddit: false, youtube: false };
+
+function _setTabLoading(name, loading) {
+  const btn = document.querySelector(`.ptoggle-btn[onclick*="'${name}'"]`);
+  if (btn) btn.classList.toggle('tab-loading', loading);
+}
+
+function _showPanelLoader(name) {
+  const el  = document.getElementById(name + '-panel-loader');
+  const bar = document.getElementById(name + '-plo-bar');
+  if (!el || !bar) return;
+  el.style.display = '';
+  bar.style.width = '0%';
+  bar.style.transition = 'none';
+  void bar.offsetWidth;
+  bar.style.transition = 'width 0.9s ease-out';
+  bar.style.width = '88%';
+}
+
+function _hidePanelLoader(name) {
+  const el = document.getElementById(name + '-panel-loader');
+  if (el) el.style.display = 'none';
+}
+
+function switchPlatform(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+  document.querySelectorAll('.ptoggle-btn').forEach(b => b.classList.remove('active'));
+  const panel = document.getElementById('panel-' + name);
+  if (panel) panel.style.display = '';
+  if (btn) btn.classList.add('active');
+  if (_panelPreloading[name]) {
+    // Background preload in progress — show loader inside panel until done
+    _showPanelLoader(name);
+    return;
+  }
+  if (!_panelRendered[name]) {
+    _panelRendered[name] = true;
+    _setTabLoading(name, false);
+    if (name === 'all')     initAllCharts();
+    if (name === 'reddit')  { _hidePanelLoader('reddit');  initRedditCharts();  }
+    if (name === 'youtube') { _hidePanelLoader('youtube'); initYouTubeCharts(); }
+    if (name === 'compare') initCompareCharts();
+  }
+}
+
+// ── Loading indicators ────────────────────────────────────────
+function startLoadingUI(isLive) {
+  const btn    = document.getElementById('analyzeBtn');
+  const loader = document.getElementById('loadingIndicator');
+  const pText  = document.getElementById('progressText');
+  const pBar   = document.getElementById('progressBar');
+  const pPct   = document.getElementById('progressPercent');
+  if (!loader) return;
+  if (btn) { btn.disabled = true; btn.innerText = 'Loading…'; }
+  pBar.style.width = '0%'; pPct.innerText = '0%';
+  pText.textContent = 'Loading data…';
+  loader.style.display = 'flex';
+  if (!isLive) {
+    const stages = [[15,800,'Connecting to database…'],[40,1800,'Fetching comments…'],[65,3000,'Building visualisations…'],[85,4500,'Preparing charts…'],[95,6000,'Almost ready…']];
+    stages.forEach(([pct, delay, msg]) => {
+      setTimeout(() => {
+        if (loader.style.display !== 'none') {
+          pBar.style.width = pct + '%'; pPct.innerText = pct + '%';
+          pText.textContent = msg;
+        }
+      }, delay);
+    });
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  // Chart.js global defaults
   Chart.defaults.color = '#94a3b8';
   Chart.defaults.font.family = "'Inter', -apple-system, sans-serif";
   Chart.defaults.font.size = 12;
-  Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(11, 15, 25, 0.95)';
+  Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(11,15,25,0.95)';
   Chart.defaults.plugins.tooltip.titleColor = '#fff';
   Chart.defaults.plugins.tooltip.bodyColor = '#94a3b8';
   Chart.defaults.plugins.tooltip.padding = 12;
-  Chart.defaults.plugins.tooltip.borderColor = 'rgba(0, 242, 254, 0.25)';
+  Chart.defaults.plugins.tooltip.borderColor = 'rgba(0,242,254,0.25)';
   Chart.defaults.plugins.tooltip.borderWidth = 1;
   Chart.defaults.plugins.tooltip.cornerRadius = 8;
-  Chart.defaults.scale.grid.color = 'rgba(255, 255, 255, 0.04)';
+  Chart.defaults.scale.grid.color = 'rgba(255,255,255,0.04)';
   Chart.defaults.scale.border = { color: 'rgba(255,255,255,0.06)' };
 
-  const C = {
-    pos:       'rgba(16, 185, 129, 0.75)',
-    posSolid:  'rgba(16, 185, 129, 1)',
-    posArea:   'rgba(16, 185, 129, 0.12)',
-    neg:       'rgba(239, 68, 68, 0.75)',
-    negSolid:  'rgba(239, 68, 68, 1)',
-    negArea:   'rgba(239, 68, 68, 0.12)',
-    neu:       'rgba(79, 172, 254, 0.75)',
-    neuSolid:  'rgba(79, 172, 254, 1)',
-    neuArea:   'rgba(79, 172, 254, 0.12)',
-    purple:    'rgba(168, 85, 247, 0.7)',
-    purpleSolid: 'rgba(168, 85, 247, 1)',
-    cyan:      'rgba(0, 242, 254, 0.75)',
-    cyanSolid: 'rgba(0, 242, 254, 1)',
-    yellow:    'rgba(245, 158, 11, 0.75)',
-    yellowSolid: 'rgba(245, 158, 11, 1)',
-  };
+  // P1: Initialize default 'all' panel immediately
+  switchPlatform('all', document.querySelector('.ptoggle-btn'));
 
-  const sentColor  = l => l.toLowerCase() === 'positive' ? C.pos  : (l.toLowerCase() === 'negative' ? C.neg  : C.neu);
-  const sentSolid  = l => l.toLowerCase() === 'positive' ? C.posSolid : (l.toLowerCase() === 'negative' ? C.negSolid : C.neuSolid);
-  const sentArea   = l => l.toLowerCase() === 'positive' ? C.posArea  : (l.toLowerCase() === 'negative' ? C.negArea  : C.neuArea);
-
-  // ── Chart 1: Overall Sentiment Doughnut ──────────────────
-  if (db.chart1_overall_sentiment) {
-    new Chart(document.getElementById('chart1'), {
-      type: 'doughnut',
-      data: {
-        labels: db.chart1_overall_sentiment.labels,
-        datasets: [{
-          data: db.chart1_overall_sentiment.values,
-          backgroundColor: db.chart1_overall_sentiment.labels.map(sentColor),
-          borderColor: 'rgba(11, 15, 25, 1)',
-          borderWidth: 3,
-          hoverOffset: 8
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        cutout: '68%',
-        plugins: {
-          legend: { position: 'bottom', labels: { padding: 20, usePointStyle: true, pointStyleWidth: 10 } }
-        }
+  // P2: Preload Reddit charts in background (150ms after P1 starts)
+  if (typeof chartsRedditRaw !== 'undefined' && chartsRedditRaw && Object.keys(chartsRedditRaw).length) {
+    _panelPreloading.reddit = true;
+    _setTabLoading('reddit', true);
+    setTimeout(() => {
+      if (!_panelRendered.reddit) {
+        _panelRendered.reddit = true;
+        initRedditCharts();
       }
-    });
+      _panelPreloading.reddit = false;
+      _setTabLoading('reddit', false);
+      _hidePanelLoader('reddit');
+    }, 150);
   }
 
-  // ── Chart 2: Sentiment Timeline ──────────────────────────
-  if (db.chart2_sentiment_timeline) {
-    const ds2 = db.chart2_sentiment_timeline.datasets;
-    new Chart(document.getElementById('chart2'), {
-      type: 'line',
-      data: {
-        labels: db.chart2_sentiment_timeline.labels,
-        datasets: Object.keys(ds2).map(k => ({
-          label: k,
-          data: ds2[k],
-          borderColor: sentSolid(k),
-          backgroundColor: sentArea(k),
-          tension: 0.4, fill: true, borderWidth: 2, pointRadius: 2, pointHoverRadius: 5
-        }))
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: { legend: { position: 'top' } },
-        scales: { y: { beginAtZero: true } }
+  // P3: Preload YouTube charts in background (after Reddit, 300ms)
+  if (typeof chartsYoutubeRaw !== 'undefined' && chartsYoutubeRaw && Object.keys(chartsYoutubeRaw).length) {
+    _panelPreloading.youtube = true;
+    _setTabLoading('youtube', true);
+    setTimeout(() => {
+      if (!_panelRendered.youtube) {
+        _panelRendered.youtube = true;
+        initYouTubeCharts();
       }
-    });
+      _panelPreloading.youtube = false;
+      _setTabLoading('youtube', false);
+      _hidePanelLoader('youtube');
+    }, 300);
   }
 
-  // ── Chart 3: Avg Upvotes by Sentiment ────────────────────
-  if (db.chart3_avg_upvotes_sentiment) {
-    new Chart(document.getElementById('chart3'), {
-      type: 'bar',
-      data: {
-        labels: db.chart3_avg_upvotes_sentiment.labels,
-        datasets: [{
-          label: 'Avg Upvotes',
-          data: db.chart3_avg_upvotes_sentiment.values,
-          backgroundColor: db.chart3_avg_upvotes_sentiment.labels.map(sentColor),
-          borderColor:      db.chart3_avg_upvotes_sentiment.labels.map(sentSolid),
-          borderWidth: 1,
-          borderRadius: 8, borderSkipped: false
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true } }
-      }
-    });
-  }
+  // Hide loader on page load
+  window.addEventListener('pageshow', () => {
+    const loader = document.getElementById('loadingIndicator');
+    if (loader) loader.style.display = 'none';
+  });
 
-  // ── Chart 4: Positivity vs Engagement Scatter ────────────
-  if (db.chart4_sentiment_vs_engagement?.data) {
-    new Chart(document.getElementById('chart4'), {
-      type: 'scatter',
-      data: {
-        datasets: [{
-          label: 'Posts',
-          data: db.chart4_sentiment_vs_engagement.data,
-          backgroundColor: C.purple, pointRadius: 3, pointHoverRadius: 6
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        scales: {
-          x: { title: { display: true, text: 'Positivity Score (0–1)' } },
-          y: { title: { display: true, text: 'Upvotes' }, type: 'logarithmic' }
-        }
-      }
-    });
-  }
+  // Loading UI on hero card clicks
+  document.querySelectorAll('.hero-card').forEach(btn => {
+    btn.addEventListener('click', () => startLoadingUI(false));
+  });
 
-  // ── Chart 5: Top 10 Posts ────────────────────────────────
-  if (db.chart5_top_10_posts) {
-    new Chart(document.getElementById('chart5'), {
-      type: 'bar',
-      data: {
-        labels: db.chart5_top_10_posts.labels,
-        datasets: [{
-          label: 'Upvotes',
-          data: db.chart5_top_10_posts.values,
-          backgroundColor: C.cyan, borderColor: C.cyanSolid,
-          borderWidth: 1, borderRadius: 4
-        }]
-      },
-      options: {
-        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } }
-      }
-    });
-  }
-
-  // ── Chart 6: Volatility ──────────────────────────────────
-  if (db.chart6_sentiment_volatility) {
-    new Chart(document.getElementById('chart6'), {
-      type: 'line',
-      data: {
-        labels: db.chart6_sentiment_volatility.labels,
-        datasets: [{
-          label: 'Volatility',
-          data: db.chart6_sentiment_volatility.values,
-          borderColor: C.yellowSolid, backgroundColor: 'rgba(245,158,11,0.15)',
-          fill: true, tension: 0.4, borderWidth: 2, pointRadius: 0
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true } }
-      }
-    });
-  }
-
-  // ── Chart 7: Negative Intensity ──────────────────────────
-  if (db.chart7_negative_intensity) {
-    new Chart(document.getElementById('chart7'), {
-      type: 'bar',
-      data: {
-        labels: db.chart7_negative_intensity.labels,
-        datasets: [{
-          label: 'Count',
-          data: db.chart7_negative_intensity.values,
-          backgroundColor: [
-            'rgba(239,68,68,0.35)', 'rgba(239,68,68,0.50)',
-            'rgba(239,68,68,0.65)', 'rgba(239,68,68,0.80)', 'rgba(239,68,68,1)'
-          ],
-          borderColor: C.negSolid, borderWidth: 1, borderRadius: 6
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true } }
-      }
-    });
-  }
-
-  // ── Chart 8: Positive Intensity ──────────────────────────
-  if (db.chart8_positive_intensity) {
-    new Chart(document.getElementById('chart8'), {
-      type: 'bar',
-      data: {
-        labels: db.chart8_positive_intensity.labels,
-        datasets: [{
-          label: 'Count',
-          data: db.chart8_positive_intensity.values,
-          backgroundColor: [
-            'rgba(16,185,129,0.35)', 'rgba(16,185,129,0.50)',
-            'rgba(16,185,129,0.65)', 'rgba(16,185,129,0.80)', 'rgba(16,185,129,1)'
-          ],
-          borderColor: C.posSolid, borderWidth: 1, borderRadius: 6
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true } }
-      }
-    });
-  }
-
-  // ── Chart 9: Neutral Volume ───────────────────────────────
-  if (db.chart9_neutral_volume) {
-    new Chart(document.getElementById('chart9'), {
-      type: 'line',
-      data: {
-        labels: db.chart9_neutral_volume.labels,
-        datasets: [{
-          label: 'Neutral Posts',
-          data: db.chart9_neutral_volume.values,
-          borderColor: C.neuSolid, backgroundColor: C.neuArea,
-          fill: true, tension: 0.3, borderWidth: 2, pointRadius: 1
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true } }
-      }
-    });
-  }
-
-  // ── Chart 10: Volume by Hour ──────────────────────────────
-  if (db.chart10_volume_by_hour) {
-    new Chart(document.getElementById('chart10'), {
-      type: 'bar',
-      data: {
-        labels: db.chart10_volume_by_hour.labels,
-        datasets: [{
-          label: 'Posts',
-          data: db.chart10_volume_by_hour.values,
-          backgroundColor: C.purple, borderColor: C.purpleSolid,
-          borderWidth: 1, borderRadius: 3
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true } }
-      }
-    });
-  }
-
-  // ── Chart 11: AI Probability Baseline ────────────────────
-  if (db.chart11_avg_probabilities) {
-    new Chart(document.getElementById('chart11'), {
-      type: 'radar',
-      data: {
-        labels: db.chart11_avg_probabilities.labels,
-        datasets: [{
-          label: 'Avg Probability',
-          data: db.chart11_avg_probabilities.values,
-          borderColor: C.cyanSolid, backgroundColor: 'rgba(0,242,254,0.15)',
-          pointBackgroundColor: C.cyanSolid, pointRadius: 4, borderWidth: 2
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        scales: {
-          r: {
-            grid: { color: 'rgba(255,255,255,0.08)' },
-            angleLines: { color: 'rgba(255,255,255,0.08)' },
-            ticks: { backdropColor: 'transparent', stepSize: 0.1 }
-          }
-        }
-      }
-    });
-  }
-
-  // ── Chart 12: Text Length vs Sentiment ───────────────────
-  if (db.chart12_text_length_vs_sentiment?.data) {
-    new Chart(document.getElementById('chart12'), {
-      type: 'scatter',
-      data: {
-        datasets: [{
-          label: 'Posts',
-          data: db.chart12_text_length_vs_sentiment.data,
-          backgroundColor: C.neu, pointRadius: 3, pointHoverRadius: 6
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        scales: {
-          x: { title: { display: true, text: 'Character Length' } },
-          y: { title: { display: true, text: 'Positivity Score' }, min: 0, max: 1 }
-        }
-      }
-    });
-  }
-
-  // ── Chart 13: Score Distribution ─────────────────────────
-  if (db.chart13_score_distribution) {
-    new Chart(document.getElementById('chart13'), {
-      type: 'bar',
-      data: {
-        labels: db.chart13_score_distribution.labels,
-        datasets: [{
-          label: 'Posts',
-          data: db.chart13_score_distribution.values,
-          backgroundColor: C.yellow, borderColor: C.yellowSolid,
-          borderWidth: 1, borderRadius: 6
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true } }
-      }
-    });
-  }
-
-  // ── Chart 14: Cumulative Posts ────────────────────────────
-  if (db.chart14_cumulative_posts) {
-    new Chart(document.getElementById('chart14'), {
-      type: 'line',
-      data: {
-        labels: db.chart14_cumulative_posts.labels,
-        datasets: [{
-          label: 'Total Comments',
-          data: db.chart14_cumulative_posts.values,
-          borderColor: C.posSolid, backgroundColor: C.posArea,
-          fill: true, tension: 0.1, borderWidth: 2, pointRadius: 0
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true } }
-      }
-    });
-  }
-
-  // ── Chart 15: Sentiment by Day of Week ───────────────────
-  if (db.chart15_sentiment_by_day) {
-    const ds15 = db.chart15_sentiment_by_day.datasets;
-    new Chart(document.getElementById('chart15'), {
-      type: 'bar',
-      data: {
-        labels: db.chart15_sentiment_by_day.labels,
-        datasets: Object.keys(ds15).map(k => ({
-          label: k, data: ds15[k],
-          backgroundColor: sentColor(k), borderColor: sentSolid(k),
-          borderWidth: 1, borderRadius: 4
-        }))
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        scales: {
-          x: { stacked: true },
-          y: { stacked: true, beginAtZero: true }
-        },
-        plugins: { legend: { position: 'top' } }
-      }
-    });
-  }
-
-
-  // ── Content Intelligence Charts ───────────────────────────
-  const insights = {{ insights_data | tojson | safe }};
-
-  // Chart: Keywords — Positive
-  if (insights?.keyword_split?.positive?.labels?.length) {
-    const kw = insights.keyword_split.positive;
-    new Chart(document.getElementById('chartKwPos'), {
-      type: 'bar',
-      data: {
-        labels: kw.labels,
-        datasets: [{ label: 'Mentions', data: kw.values,
-          backgroundColor: 'rgba(16,185,129,0.55)', borderColor: C.posSolid,
-          borderWidth: 1, borderRadius: 4 }]
-      },
-      options: {
-        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { x: { beginAtZero: true } }
-      }
-    });
-  }
-
-  // Chart: Keywords — Negative
-  if (insights?.keyword_split?.negative?.labels?.length) {
-    const kw = insights.keyword_split.negative;
-    new Chart(document.getElementById('chartKwNeg'), {
-      type: 'bar',
-      data: {
-        labels: kw.labels,
-        datasets: [{ label: 'Mentions', data: kw.values,
-          backgroundColor: 'rgba(239,68,68,0.55)', borderColor: C.negSolid,
-          borderWidth: 1, borderRadius: 4 }]
-      },
-      options: {
-        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { x: { beginAtZero: true } }
-      }
-    });
-  }
-
-  // Chart: What's Being Debated (post title sentiment breakdown)
-  if (insights?.post_title_debate?.labels?.length) {
-    const d = insights.post_title_debate;
-    new Chart(document.getElementById('chartDebate'), {
-      type: 'bar',
-      data: {
-        labels: d.labels,
-        datasets: [
-          { label: 'Positive', data: d.datasets.Positive,
-            backgroundColor: 'rgba(16,185,129,0.7)',  borderColor: C.posSolid, borderWidth: 1, borderRadius: 3 },
-          { label: 'Negative', data: d.datasets.Negative,
-            backgroundColor: 'rgba(239,68,68,0.7)',   borderColor: C.negSolid, borderWidth: 1, borderRadius: 3 },
-          { label: 'Neutral',  data: d.datasets.Neutral,
-            backgroundColor: 'rgba(79,172,254,0.5)',  borderColor: C.neuSolid, borderWidth: 1, borderRadius: 3 },
-        ]
-      },
-      options: {
-        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-        scales: { x: { stacked: true, beginAtZero: true }, y: { stacked: true } },
-        plugins: { legend: { position: 'top' } }
-      }
-    });
-  }
-
-  // Chart: Sentiment Momentum (7-day rolling)
-  if (insights?.sentiment_momentum?.labels?.length) {
-    const mom = insights.sentiment_momentum;
-    const up  = mom.direction === 'improving';
-    const badge = document.getElementById('momentumBadge');
-    if (badge) {
-      badge.innerHTML = `<span style="padding:5px 14px; border-radius:20px; font-size:0.75rem; font-weight:700;
-        background:${up ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'};
-        color:${up ? 'var(--accent-green)' : 'var(--accent-red)'};
-        border:1px solid ${up ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'};">
-        ${up ? 'Opinion Improving ↑' : 'Opinion Declining ↓'}</span>`;
-    }
-    new Chart(document.getElementById('chartMomentum'), {
-      type: 'line',
-      data: {
-        labels: mom.labels,
-        datasets: [{
-          label: '7-day Rolling Net Sentiment',
-          data: mom.values,
-          borderColor:     up ? C.posSolid : C.negSolid,
-          backgroundColor: up ? C.posArea  : C.negArea,
-          fill: true, tension: 0.4, borderWidth: 2.5, pointRadius: 0,
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          y: { grid: { color: 'rgba(255,255,255,0.04)' } }
-        }
-      }
-    });
-  }
-
-
-  // ── Loading Indicator ─────────────────────────────────────
+  // Progress polling on search form submit
   const searchForm = document.getElementById('searchForm');
   if (searchForm) {
     let pollInterval;
     searchForm.addEventListener('submit', function () {
-      const btn     = document.getElementById('analyzeBtn');
-      const loader  = document.getElementById('loadingIndicator');
-      const pText   = document.getElementById('progressText');
-      const pBar    = document.getElementById('progressBar');
-      const pPct    = document.getElementById('progressPercent');
-
+      startLoadingUI(true);
+      const btn    = document.getElementById('analyzeBtn');
+      const loader = document.getElementById('loadingIndicator');
+      const pText  = document.getElementById('progressText');
+      const pBar   = document.getElementById('progressBar');
+      const pPct   = document.getElementById('progressPercent');
       if (btn && loader) {
-        btn.disabled = true;
-        btn.innerText = 'Working…';
-        pBar.style.width = '0%';
-        pPct.innerText = '0%';
-        pText.innerHTML = '<span class="spinner" style="width:14px;height:14px;border-width:2px;"></span> Connecting to source…';
-        loader.style.display = 'block';
-
         pollInterval = setInterval(async () => {
           try {
             const res  = await fetch('/api/fetch_progress');
             const data = await res.json();
             let pct = 0;
-
             if (data.status === 'fetching' && data.total > 0) {
               pct = Math.floor((data.current / data.total) * 90);
-              pText.innerHTML = `<span class="spinner" style="width:14px;height:14px;border-width:2px;"></span> ${data.message} (${data.current}/${data.total})`;
+              pText.textContent = `${data.message} (${data.current}/${data.total})`;
             } else if (data.status === 'analyzing') {
               pct = 95;
-              pText.innerHTML = `<span class="spinner" style="width:14px;height:14px;border-width:2px;"></span> ${data.message}`;
+              pText.textContent = data.message;
             } else if (data.status === 'complete') {
               pct = 100;
-              pText.innerHTML = `✓ ${data.message} Reloading…`;
+              pText.textContent = `✓ ${data.message} Reloading…`;
               clearInterval(pollInterval);
             }
-
-            pBar.style.width = pct + '%';
-            pPct.innerText   = pct + '%';
-          } catch (err) {
-            console.error('Failed to poll progress:', err);
-          }
+            pBar.style.width = pct + '%'; pPct.innerText = pct + '%';
+          } catch (err) { console.error('Failed to poll progress:', err); }
         }, 500);
       }
     });
   }
-
 });
+
+
+  // ── PDF Export ──────────────────────────────────────────
+  window.exportPDF = function () {
+
+    // ── STEP 1: Make all tab panels visible so charts have real dimensions
+    const panels = document.querySelectorAll('.tab-panel');
+    const savedDisplays = [];
+    panels.forEach(function (p) {
+      savedDisplays.push(p.style.display);
+      p.style.display = 'block';
+    });
+
+    // ── STEP 2: Force-initialize any tabs the user never opened
+    if (!_panelRendered.all)     { _panelRendered.all     = true; initAllCharts(); }
+    if (!_panelRendered.reddit)  { _panelRendered.reddit  = true; initRedditCharts(); }
+    if (!_panelRendered.youtube) { _panelRendered.youtube = true; initYouTubeCharts(); }
+
+    // ── STEP 3: Override chart text/grid colors to print-friendly dark tones
+    const savedDefColor  = Chart.defaults.color;
+    const savedGridColor = Chart.defaults.scale.grid.color;
+    Chart.defaults.color           = '#222';
+    Chart.defaults.scale.grid.color = 'rgba(0,0,0,0.08)';
+    Object.values(Chart.instances).forEach(function (chart) {
+      try {
+        if (chart.options.plugins && chart.options.plugins.legend) {
+          chart.options.plugins.legend.labels = chart.options.plugins.legend.labels || {};
+          chart.options.plugins.legend.labels.color = '#222';
+        }
+        if (chart.options.scales) {
+          Object.values(chart.options.scales).forEach(function (scale) {
+            if (scale.ticks) scale.ticks.color = '#444';
+            if (scale.grid)  scale.grid.color  = 'rgba(0,0,0,0.08)';
+          });
+        }
+        chart.update('none'); // instant, no animation
+      } catch (e) {}
+    });
+
+    // ── STEP 4: Wait 300ms for Chart.js to finish drawing (it uses rAF internally)
+    setTimeout(function () {
+
+      // ── STEP 5: Convert every canvas → white-background PNG image
+      const converted = [];
+      document.querySelectorAll('canvas').forEach(function (canvas) {
+        try {
+          if (!canvas.width || !canvas.height) return;
+          const tmp = document.createElement('canvas');
+          tmp.width  = canvas.width;
+          tmp.height = canvas.height;
+          const ctx = tmp.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, tmp.width, tmp.height);
+          ctx.drawImage(canvas, 0, 0);
+          const img = document.createElement('img');
+          img.src = tmp.toDataURL('image/png');
+          img.className = 'print-canvas-img';
+          img.style.display = 'block';
+          img.style.maxWidth = '100%';
+          img.style.width  = (canvas.offsetWidth  || canvas.width)  + 'px';
+          img.style.height = (canvas.offsetHeight || canvas.height) + 'px';
+          canvas.parentNode.insertBefore(img, canvas);
+          canvas.style.display = 'none';
+          converted.push({ canvas: canvas, img: img });
+        } catch (e) { /* tainted or 0-size canvas — skip */ }
+      });
+
+      // ── STEP 6: Print
+      var prevTitle = document.title;
+      document.title = '{{ current_topic }} — PSI Analysis';
+      window.print();
+      document.title = prevTitle;
+
+      // ── STEP 7: Restore page to normal
+      panels.forEach(function (p, i) { p.style.display = savedDisplays[i]; });
+      converted.forEach(function (pair) {
+        pair.canvas.style.display = '';
+        pair.img.remove();
+      });
+      Chart.defaults.color           = savedDefColor;
+      Chart.defaults.scale.grid.color = savedGridColor;
+      Object.values(Chart.instances).forEach(function (chart) {
+        try {
+          if (chart.options.plugins && chart.options.plugins.legend) {
+            chart.options.plugins.legend.labels = chart.options.plugins.legend.labels || {};
+            chart.options.plugins.legend.labels.color = savedDefColor;
+          }
+          if (chart.options.scales) {
+            Object.values(chart.options.scales).forEach(function (scale) {
+              if (scale.ticks) scale.ticks.color = savedDefColor;
+              if (scale.grid)  scale.grid.color  = savedGridColor;
+            });
+          }
+          chart.update('none');
+        } catch (e) {}
+      });
+
+    }, 300);
+  };
 </script>
 {% endblock %}

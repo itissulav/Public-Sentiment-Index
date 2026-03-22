@@ -27,10 +27,10 @@ def get_all_topics():
         return 0, []
 
 def get_predefined_topics():
-    """Fetch all predefined (shared) topics from search_topics where user_id IS NULL."""
+    """Fetch all predefined (shared) topics from topics where user_id IS NULL."""
     try:
-        response = admin_supabase.table("search_topics") \
-                                 .select("id, name, rating, sentiment, total_comments, last_updated") \
+        response = admin_supabase.table("topics") \
+                                 .select("id, name, category, created_at") \
                                  .is_("user_id", "null") \
                                  .order("name") \
                                  .execute()

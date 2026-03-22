@@ -1,5 +1,5 @@
-{% extends "base.html" %} 
-{% block title %}Home - Public Sentiment Index{% endblock %} 
+{% extends "base.html" %}
+{% block title %}Home — Public Sentiment Index{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}" />
@@ -7,138 +7,206 @@
 
 {% block content %}
 <div class="home-container">
-  {% if user %}
-    <!-- LOGGED IN VIEW -->
-    <div class="dashboard-header">
-      <h1>Welcome back, <span class="gradient-text">{{ user.get_first_name() }}</span></h1>
-      <p>Here's what's trending in public sentiment today.</p>
-    </div>
+{% if user %}
 
-    <!-- User Quick Stats or Explore -->
-    <div class="quick-stats-grid">
-      <div class="glass-card trending-card">
-        <div class="card-icon"><i data-lucide="trending-up"></i></div>
-        <h3>Trending Topics</h3>
-        <p>Explore what everyone is talking about.</p>
-        <a href="{{ url_for('main.trends') }}" class="btn-glow-small mt-3">Explore Trends</a>
-      </div>
-      <div class="glass-card history-card">
-        <div class="card-icon"><i data-lucide="clock-3"></i></div>
-        <h3>Saved Scans</h3>
-        <p>You have <strong>{{ saved_scan_count }}</strong> saved sentiment report{{ 's' if saved_scan_count != 1 else '' }}.</p>
-        <a href="{{ url_for('main.history') }}" class="btn-outline mt-3">View History</a>
-      </div>
-      <div class="glass-card profile-card">
-        <div class="profile-avatar">{{ user.get_first_name()[0] }}{{ user.get_last_name()[0] }}</div>
-        <div class="profile-details">
-          <h3>@{{ user.get_username() }}</h3>
-          <p class="role-text">{{ user.get_role() }}</p>
-        </div>
-      </div>
+  <!-- ══════════════════════════════════════════════════════════
+       LOGGED-IN DASHBOARD
+       ══════════════════════════════════════════════════════════ -->
+  <div class="dashboard-header">
+    <div>
+      <h1>Hello, <span class="gradient-text">{{ user.get_first_name() }}</span></h1>
+      <p>{{ "{:,}".format(saved_scan_count) }} saved report{{ 's' if saved_scan_count != 1 else '' }} · {{ trending_topics|length }} featured topics</p>
     </div>
+  </div>
 
-    <!-- Live Trends Preview -->
-    <div class="trends-preview-section">
-      <div class="section-header-flex">
-        <h2>Live Sentiment Trends</h2>
-        <a href="{{ url_for('main.trends') }}" class="view-all-link">Analyze Full Data →</a>
-      </div>
-      <div class="trends-list">
-        {% if trending_topics %}
-          {% for topic in trending_topics %}
-            {% set img_name = topic.name|replace(' ', '')|lower + '.png' %}
-            {% set color_class = 'positive' if topic.sentiment == 'Positive' else ('negative' if topic.sentiment == 'Negative' else 'neutral') %}
-            <form method="POST" action="{{ url_for('main.trends') }}" style="margin:0; padding:0;">
-              <input type="hidden" name="topic" value="{{ topic.name }}">
-              <button type="submit" class="trend-item" style="width:100%; text-align:left; background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.85)), url({{ url_for('static', filename='images/' + img_name) }}); background-size: cover; background-position: center; border: 1px solid rgba(255,255,255,0.1); cursor:pointer;">
-                <div class="trend-rank">#{{ loop.index }}</div>
-                <div class="trend-info">
-                  <h4 style="color: white; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">{{ topic.name }}</h4>
-                  <p style="color: #aaa;">{{ "{:,}".format(topic.total_comments|default(0)) }} posts analyzed</p>
-                </div>
-                <div class="trend-score-area">
-                  <div class="trend-sentiment {{ color_class }}" style="background: rgba(0,0,0,0.5); padding: 5px 12px; border-radius: 8px;">
-                    <span class="score" style="font-size: 1.2rem;">{{ topic.rating }}</span>
-                    <span class="label">{{ topic.sentiment }}</span>
-                  </div>
-                </div>
-              </button>
-            </form>
-          {% endfor %}
-        {% else %}
-          <p style="color: #888; font-style: italic;">No trending data available yet. Please run the backend analyzer.</p>
-        {% endif %}
+  <!-- Quick stats row -->
+  <div class="quick-stats-grid">
+    <div class="glass-card trending-card">
+      <div class="card-icon"><i data-lucide="trending-up"></i></div>
+      <h3>Explore Trends</h3>
+      <p>Search any topic and get a full sentiment breakdown powered by AI.</p>
+      <a href="{{ url_for('main.trends') }}" class="btn-glow-small mt-3">Go to Dashboard</a>
+    </div>
+    <div class="glass-card history-card">
+      <div class="card-icon"><i data-lucide="clock-3"></i></div>
+      <h3>Saved Scans</h3>
+      <p>You have <strong style="color:#f5f0e8;">{{ saved_scan_count }}</strong> sentiment report{{ 's' if saved_scan_count != 1 else '' }} waiting.</p>
+      <a href="{{ url_for('main.history') }}" class="btn-outline mt-3">View History</a>
+    </div>
+    <div class="glass-card profile-card">
+      <div class="profile-avatar">{{ user.get_first_name()[0] }}{{ user.get_last_name()[0] }}</div>
+      <div class="profile-details">
+        <h3>@{{ user.get_username() }}</h3>
+        <p class="role-text">{{ user.get_role() }}</p>
       </div>
     </div>
+  </div>
 
-  {% else %}
-    <!-- LOGGED OUT VIEW -->
-    <div class="hero-landing">
-      <div class="hero-content-centered">
-        <div class="badge glow-badge">The Future of Data Analytics</div>
-        <h1 class="hero-title">Decode the Public Pulse in <span class="gradient-text">Real-Time</span></h1>
-        <p class="hero-subtitle">
-          The Public Sentiment Index (PSI) harnesses the power of advanced Transformer models 
-          to quantify national emotions. Stop guessing what the public thinks. Know it.
-        </p>
-        <div class="hero-actions">
-          <a href="{{ url_for('auth.register') }}" class="btn-glow">Get Started Free</a>
-          <a href="{{ url_for('main.about') }}" class="btn-outline-large">Learn More</a>
-        </div>
-      </div>
-      
-      <!-- Mockup Visual -->
-      <div class="hero-visual">
-        <div class="glass-window mock-dashboard">
-          <div class="window-header">
-            <span class="dot red"></span>
-            <span class="dot yellow"></span>
-            <span class="dot green"></span>
-          </div>
-          <div class="window-body">
-            <div class="mock-chart-container">
-              <div class="mock-chart">
-                 <div class="bar bar-1"></div>
-                 <div class="bar bar-2"></div>
-                 <div class="bar bar-3"></div>
-                 <div class="bar bar-4"></div>
-                 <div class="bar bar-5"></div>
+  <!-- Featured Topics magazine grid -->
+  <div class="trends-preview-section">
+    <div class="section-header-flex">
+      <h2>Featured Topics</h2>
+      <a href="{{ url_for('main.trends') }}" class="view-all-link">Analyse Custom Topic →</a>
+    </div>
+
+    {% set img_map = {
+      "Donald Trump":      "donaldtrump.png",
+      "The Boys":          "theboys.png",
+      "Avengers Doomsday": "avengersdoomsday.png",
+      "Macbook Neo":       "macbookneo.png",
+      "America vs Iran":   "americavsiran.png"
+    } %}
+
+    <div class="trends-list">
+      {% for topic in trending_topics %}
+        {% set img_name = img_map.get(topic.name, topic.name|replace(' ','')|lower + '.png') %}
+        {% set color_class = 'positive' if topic.sentiment == 'Positive' else ('negative' if topic.sentiment == 'Negative' else 'neutral') %}
+        <form method="POST" action="{{ url_for('main.trends') }}" style="display:contents;" onsubmit="showHomeLoader()">
+          <input type="hidden" name="topic" value="{{ topic.name }}">
+          <button type="submit" class="trend-item">
+            <div class="trend-item-bg" style="background-image:url('{{ url_for('static', filename='images/' ~ img_name) }}')"></div>
+            <div class="trend-item-overlay"></div>
+            <div class="trend-item-content">
+              <div class="trend-rank"># {{ loop.index }}</div>
+              <div class="trend-info">
+                <h4>{{ topic.name }}</h4>
+                <p>{{ "{:,}".format(topic.total_comments|default(0)) }} comments analysed</p>
               </div>
-              <div class="chart-line"></div>
+              <div class="trend-score-area">
+                <span class="trend-sentiment {{ color_class }}">
+                  <span class="score">{{ topic.rating }}</span>
+                  <span class="label">{{ topic.sentiment }}</span>
+                </span>
+              </div>
             </div>
-            <div class="mock-stats">
-              <div class="m-stat"><div class="m-val">92%</div><div class="m-lbl">Accuracy</div></div>
-              <div class="m-stat"><div class="m-val highlight">2.5M+</div><div class="m-lbl">Posts Analyzed</div></div>
-            </div>
-          </div>
+          </button>
+        </form>
+      {% else %}
+        <p style="color:#6b6577;font-style:italic;padding:20px 0;">No featured topics yet.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+{% else %}
+
+  <!-- ══════════════════════════════════════════════════════════
+       LOGGED-OUT HERO
+       ══════════════════════════════════════════════════════════ -->
+  <div class="hero-landing">
+
+    <!-- Left: editorial text column -->
+    <div class="hero-left">
+      <div class="hero-eyebrow">
+        <span class="hero-eyebrow-line"></span>
+        <span class="hero-eyebrow-text">Public Sentiment Index</span>
+      </div>
+
+      <h1 class="hero-title">
+        What does the<br>
+        world <em>actually</em><br>
+        think?
+      </h1>
+
+      <p class="hero-subtitle">
+        PSI transforms millions of Reddit and YouTube comments into
+        a single, AI-powered sentiment score — updated in real time,
+        sourced from real people.
+      </p>
+
+      <div class="hero-actions">
+        <a href="{{ url_for('auth.register') }}" class="btn-glow">Start for free</a>
+        <a href="{{ url_for('main.about') }}" class="btn-outline-large">How it works</a>
+      </div>
+
+      <div class="hero-stats-strip">
+        <div class="hero-stat-item">
+          <span class="hero-stat-num">2.5M+</span>
+          <span class="hero-stat-label">Comments analysed</span>
+        </div>
+        <div class="hero-stat-item">
+          <span class="hero-stat-num">14</span>
+          <span class="hero-stat-label">Unique visualizations</span>
+        </div>
+        <div class="hero-stat-item">
+          <span class="hero-stat-num">AI</span>
+          <span class="hero-stat-label">Gemini-powered insights</span>
         </div>
       </div>
     </div>
-    
-    <!-- Feature Highlights -->
-    <div class="features-section">
-      <div class="section-header-centered">
-        <h2>Why Choose PSI?</h2>
-        <p>Advanced metrics to empower decision making.</p>
+
+    <!-- Right: photo collage -->
+    <div class="hero-right">
+      <div class="hero-photo-cell">
+        <img src="{{ url_for('static', filename='images/donaldtrump.png') }}" alt="Donald Trump">
+        <span class="hero-photo-label">Donald Trump</span>
       </div>
-      <div class="features-grid">
-        <div class="feature-card">
-          <div class="f-icon"><i data-lucide="brain-circuit"></i></div>
-          <h3>AI-Powered NLP</h3>
-          <p>Utilizing state-of-the-art Natural Language Processing to accurately classify complex human emotions.</p>
-        </div>
-        <div class="feature-card">
-          <div class="f-icon"><i data-lucide="zap"></i></div>
-          <h3>Real-Time Analytics</h3>
-          <p>Live data streaming ensures you're always looking at the most current public sentiment.</p>
-        </div>
-        <div class="feature-card">
-          <div class="f-icon"><i data-lucide="shield-check"></i></div>
-          <h3>Unbiased & Secure</h3>
-          <p>Our algorithms are designed to reduce structural bias and provide an objective quantifiable score.</p>
-        </div>
+      <div class="hero-photo-cell">
+        <img src="{{ url_for('static', filename='images/theboys.png') }}" alt="The Boys">
+        <span class="hero-photo-label">The Boys</span>
+      </div>
+      <div class="hero-photo-cell">
+        <img src="{{ url_for('static', filename='images/avengersdoomsday.png') }}" alt="Avengers Doomsday">
+        <span class="hero-photo-label">Avengers Doomsday</span>
+      </div>
+      <div class="hero-photo-cell">
+        <img src="{{ url_for('static', filename='images/americavsiran.png') }}" alt="America vs Iran">
+        <span class="hero-photo-label">America vs Iran</span>
       </div>
     </div>
-  {% endif %}
+
+  </div>
+
+  <!-- Feature cards -->
+  <div class="features-section">
+    <div class="section-header-centered">
+      <h2>Intelligence<br>at scale.</h2>
+      <p>Three sources of truth — Reddit threads, YouTube comments, and AI synthesis — combined into one coherent picture of public opinion.</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <span class="f-num">01</span>
+        <h3>Transformer NLP</h3>
+        <p>State-of-the-art models classify sentiment, emotion, and confidence on every single comment — not summaries, not samples.</p>
+      </div>
+      <div class="feature-card">
+        <span class="f-num">02</span>
+        <h3>Real-Time Data</h3>
+        <p>Reddit and YouTube APIs pull fresh data the moment you search. Your results reflect what people are saying right now.</p>
+      </div>
+      <div class="feature-card">
+        <span class="f-num">03</span>
+        <h3>Gemini AI Insights</h3>
+        <p>Every chart comes with a plain-English AI explanation so you understand the story behind the numbers, not just the numbers.</p>
+      </div>
+    </div>
+  </div>
+
+{% endif %}
 </div>
+
+<!-- Full-screen loader for home topic clicks -->
+<div id="home-loader" style="display:none;position:fixed;inset:0;background:rgba(6,6,7,0.94);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:22px;">
+  <p style="color:#f5f0e8;font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:600;letter-spacing:0.03em;margin:0;">Loading analysis…</p>
+  <div style="width:320px;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;">
+    <div id="home-loader-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#FF4B1F,#FFB347);border-radius:2px;"></div>
+  </div>
+  <p style="color:#5a5565;font-size:0.82rem;margin:0;">Fetching sentiment data…</p>
+</div>
+
+<script>
+function showHomeLoader() {
+  var o = document.getElementById('home-loader');
+  o.style.display = 'flex';
+  var bar = document.getElementById('home-loader-bar');
+  bar.style.transition = 'none'; bar.style.width = '0%';
+  void bar.offsetWidth;
+  bar.style.transition = 'width 3s ease-out'; bar.style.width = '75%';
+  setTimeout(function() { bar.style.transition = 'width 10s ease-out'; bar.style.width = '93%'; }, 3200);
+}
+window.addEventListener('pageshow', function() {
+  var o = document.getElementById('home-loader');
+  if (o) o.style.display = 'none';
+});
+</script>
 {% endblock %}

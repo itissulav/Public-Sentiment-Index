@@ -519,3 +519,288 @@ body {
   .hero-topic-name   { font-size: 1.5rem; }
   .hero-rating       { font-size: 2rem; }
 }
+
+/* ── AI Insight Elements ─────────────────────────────────────────── */
+
+/* Shared label badge */
+.c-ai-label {
+  display: inline-block;
+  font-size: 0.63rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #5eb8d0;
+  background: rgba(94,184,208,0.1);
+  border: 1px solid rgba(94,184,208,0.25);
+  border-radius: 5px;
+  padding: 3px 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Shared text */
+.c-ai-text {
+  font-size: 0.88rem;
+  color: #cbd5e1;
+  line-height: 1.65;
+  margin: 0;
+}
+
+/* AI Overview card (above tabs, full-width) */
+.c-gemini-overview {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  background: linear-gradient(135deg, rgba(79,172,254,0.06), rgba(168,85,247,0.06));
+  border: 1px solid rgba(94,184,208,0.18);
+  border-radius: 12px;
+  padding: 18px 22px;
+  margin: 0 5% 0;
+}
+
+/* Inline insight row inside chart grids */
+.c-ai-insight {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: rgba(94,184,208,0.04);
+  border: 1px solid rgba(94,184,208,0.12);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-top: 4px;
+}
+
+.c-ai-insight.full {
+  grid-column: span 2;
+}
+
+/* Per-keyword AI row (inside a card) */
+.c-kw-ai-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.c-kw-ai {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.c-kw-ai.pos {
+  background: rgba(16,185,129,0.06);
+  border: 1px solid rgba(16,185,129,0.15);
+}
+
+.c-kw-ai.pos .c-ai-label {
+  color: #10b981;
+  background: rgba(16,185,129,0.1);
+  border-color: rgba(16,185,129,0.25);
+}
+
+.c-kw-ai.neg {
+  background: rgba(239,68,68,0.05);
+  border: 1px solid rgba(239,68,68,0.15);
+}
+
+.c-kw-ai.neg .c-ai-label {
+  color: #f87171;
+  background: rgba(239,68,68,0.1);
+  border-color: rgba(239,68,68,0.25);
+}
+
+@media (max-width: 768px) {
+  .c-ai-insight.full { grid-column: span 1; }
+  .c-gemini-overview { margin: 0 4%; }
+}
+
+/* ── Source Tabs ──────────────────────────────────────────────────── */
+.compare-tab-strip {
+  display: flex;
+  gap: 6px;
+  padding: 20px 5% 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  margin-bottom: 0;
+}
+
+.compare-tab {
+  position: relative;
+  padding: 10px 22px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+  margin-bottom: -1px;
+}
+
+.compare-tab:hover {
+  color: var(--text-main);
+}
+
+.compare-tab.active {
+  color: #4facfe;
+  border-bottom-color: #4facfe;
+}
+
+.compare-tab-panel {
+  padding-top: 8px;
+}
+
+/* ── No-data state for source tabs ───────────────────────────────── */
+.no-source-data {
+  text-align: center;
+  padding: 80px 20px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+/* ── Tab loading spinner (priority loading) ──────────────────────── */
+.compare-tab.tab-loading::after,
+.compare-tab.tab-loading::after {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  margin-left: 6px;
+  vertical-align: middle;
+  opacity: 0.7;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Keyword phrase cards section ────────────────────────────────── */
+.c-kw-phrase-section {
+  max-width: 1300px;
+  margin: 0 auto 28px;
+  padding: 0 2%;
+}
+
+.c-kw-phrase-header {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+
+.c-kw-phrase-topic-label {
+  font-family: 'Syne', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.c-label-a { color: #4facfe; }
+.c-label-b { color: #a855f7; }
+
+.c-kw-phrase-sub {
+  font-size: 0.78rem;
+  color: rgba(148,163,184,0.6);
+}
+
+.c-kw-phrase-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.c-kw-phrase-col { display: flex; flex-direction: column; gap: 6px; }
+
+.c-kw-col-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin: 0 0 8px;
+}
+
+.c-kw-col-label.pos { color: #10b981; }
+.c-kw-col-label.neg { color: #ef4444; }
+
+/* Keyword phrase card styles (mirrors trends.css rc-card) */
+.c-kw-phrase-section .kw-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.rc-card {
+  display: flex;
+  gap: 0;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-left: 3px solid var(--rc-border, #444);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.2s, background 0.2s;
+}
+.rc-card:hover { background: rgba(255,255,255,0.04); }
+.rc-vote {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: flex-start; gap: 3px;
+  padding: 10px 10px 10px 12px; background: rgba(0,0,0,0.2);
+  min-width: 44px;
+}
+.rc-icon { width: 13px; height: 13px; color: var(--rc-accent, #888); flex-shrink: 0; }
+.rc-score { font-size: 0.75rem; font-weight: 700; color: var(--rc-accent, #888); line-height: 1; }
+.rc-content { flex: 1; min-width: 0; padding: 9px 12px 9px 10px; display: flex; flex-direction: column; gap: 4px; }
+.rc-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rc-sub { font-size: 0.68rem; font-weight: 700; color: var(--rc-accent, #888); letter-spacing: 0.3px; }
+.rc-author { font-size: 0.68rem; color: rgba(255,255,255,0.35); }
+.rc-title { font-size: 0.77rem; font-weight: 600; color: rgba(255,255,255,0.75); line-height: 1.4; }
+.rc-body { font-size: 0.75rem; color: rgba(255,255,255,0.5); line-height: 1.5; font-style: italic; }
+
+/* ── Advanced fold (keyword bar charts) ──────────────────────────── */
+.c-advanced-fold {
+  max-width: 1300px;
+  margin: 0 auto 28px;
+  padding: 0 2%;
+}
+
+.c-advanced-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.87rem;
+  font-weight: 600;
+  color: rgba(148,163,184,0.7);
+  list-style: none;
+  transition: background 0.2s, color 0.2s;
+}
+
+.c-advanced-toggle:hover {
+  background: rgba(255,255,255,0.06);
+  color: #e2e8f0;
+}
+
+.c-advanced-sub {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: rgba(148,163,184,0.45);
+}
+
+.c-advanced-inner {
+  margin-top: 12px;
+}
+
+@media (max-width: 768px) {
+  .c-kw-phrase-cols { grid-template-columns: 1fr; }
+}

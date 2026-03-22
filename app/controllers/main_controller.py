@@ -8,9 +8,34 @@ from app.models.users import User
 from app.services.supabase_client import admin_supabase
 from app.utils.visualizer import ElectionDataVisualizer
 from app.services import admin_service
+from app.utils.cache import topic_cache
+from app.api.wiki import fetch_wiki_image as _fetch_wiki_image
+from app.services.analysis_service import run_background_analysis, purge_user_topic as _purge_user_topic
 
 # This MUST match what you import in __init__.py
-main_bp = Blueprint("main", __name__)  
+main_bp = Blueprint("main", __name__)
+
+# PostgREST nested-select string for fetching comments with their post/source context
+_COMMENT_COLS = (
+    "id,topic_id,text,author,score,published_at,"
+    "sentiment_label,emotion_label,emotion_scores,confidence_score,"
+    "posts(external_post_id,title,topic_sources(source_type,source_id))"
+)
+
+_PREDEFINED_TOPICS = {
+    "Donald Trump", "The Boys", "Avengers Doomsday", "Macbook Neo", "America vs Iran",
+}
+
+def _flatten_comment_row(row: dict) -> dict:
+    """Flatten the nested posts → topic_sources join into a flat dict matching
+    the old comments_view column names expected by the visualizer."""
+    post = row.pop("posts", None) or {}
+    ts   = (post.pop("topic_sources", None) or {}) if post else {}
+    row["post_id"]    = post.get("external_post_id", "")
+    row["post_title"] = post.get("title", "")
+    row["source_type"] = ts.get("source_type", "")
+    row["source_id"]   = ts.get("source_id", "")
+    return row
 
 @main_bp.route("/")
 def home():
@@ -19,16 +44,33 @@ def home():
 
     trending_topics = []
     try:
-        res = admin_supabase.table("search_topics").select("*").is_("user_id", "null").order("rating", desc=True).limit(5).execute()
+        # Fetch topics + their latest daily_snapshot for rating/sentiment display
+        res = admin_supabase.table("topics").select("id, name, category").is_("user_id", "null").execute()
         if res.data:
-            trending_topics = res.data
+            for t in res.data:
+                snap = admin_supabase.table("daily_snapshots") \
+                    .select("psi_rating, dominant_emotion, total_comments, snapshot_date") \
+                    .eq("topic_id", t["id"]) \
+                    .order("snapshot_date", desc=True).limit(1).execute()
+                if snap.data:
+                    t["rating"]           = snap.data[0].get("psi_rating", 0)
+                    t["sentiment"]        = "Positive" if (t["rating"] or 0) > 0 else ("Negative" if (t["rating"] or 0) < 0 else "Neutral")
+                    t["dominant_emotion"] = snap.data[0].get("dominant_emotion", "neutral")
+                    count_res = admin_supabase.table("comments").select("id", count="exact").eq("topic_id", t["id"]).execute()
+                    t["total_comments"]   = count_res.count or 0
+                else:
+                    t["rating"] = 0
+                    t["sentiment"] = "Neutral"
+                    t["total_comments"] = 0
+                    t["dominant_emotion"] = "neutral"
+            trending_topics = sorted(res.data, key=lambda x: x.get("rating", 0), reverse=True)[:5]
     except:
         pass
 
     saved_scan_count = 0
     if user:
         try:
-            res = admin_supabase.table("search_topics").select("id", count="exact") \
+            res = admin_supabase.table("topics").select("id", count="exact") \
                                 .eq("user_id", user.get_user_id()).execute()
             saved_scan_count = res.count or 0
         except:
@@ -57,6 +99,19 @@ def admindashboard():
     
     total_users, all_users = admin_service.get_all_users()
     total_topics, predefined_topics = admin_service.get_predefined_topics()
+    # Enrich predefined_topics with latest snapshot data for the admin dashboard
+    for t in predefined_topics:
+        try:
+            snap = admin_supabase.table("daily_snapshots") \
+                .select("psi_rating, dominant_emotion, total_comments, snapshot_date") \
+                .eq("topic_id", t["id"]) \
+                .order("snapshot_date", desc=True).limit(1).execute()
+            if snap.data:
+                t["rating"]    = snap.data[0].get("psi_rating", 0)
+                t["sentiment"] = "Positive" if (t.get("rating") or 0) > 0 else ("Negative" if (t.get("rating") or 0) < 0 else "Neutral")
+                t["total_comments"] = snap.data[0].get("total_comments", 0)
+        except Exception:
+            pass
 
     return render_template("admindashboard.html", user=user, total_users=total_users, all_users=all_users, total_topics=total_topics, predefined_topics=predefined_topics)
 
@@ -67,59 +122,170 @@ def trends():
     current_user_id = user.get_user_id() if user else None
 
     current_topic = None
-    charts_data = {}
-    top_positive = None
-    top_negative = None
+    charts_data   = {}      # kept for backward compat (= charts_reddit below)
+    charts_all    = {}
+    charts_reddit = {}
+    charts_youtube = {}
+    insights_data   = {}    # kept for backward compat (= insights_reddit below)
+    insights_all    = {}
+    insights_reddit = {}
+    insights_youtube = {}
+    has_youtube  = False
+    source_split = {}
+    yt_video_cards = []
+    top_positive    = None
+    top_negative    = None
+    top_positive_yt = None
+    top_negative_yt = None
     topic_info = None
-    insights_data = {}
     job_status = None   # 'processing' | None
+    has_data         = False  # True only when comment data was successfully loaded
+    current_topic_id = None   # Passed to template for the deep-dive AJAX endpoint
+    topic_cover_url  = None   # Wikipedia image URL for custom (non-predefined) topics
 
     if request.method == "POST":
-        topic_query  = request.form.get("topic")
+        topic_query    = request.form.get("topic")
         topic_id_param = request.form.get("topic_id")   # set by View Analysis on history page
 
         if topic_query:
             current_topic = topic_query
+            # Fetch a cover image for non-predefined (custom) topics
+            if current_topic not in _PREDEFINED_TOPICS:
+                topic_cover_url = _fetch_wiki_image(current_topic)
 
-            # Helper to fetch and extract data from Relational DB
+            # Helper to fetch, split by source, and build above-fold chart/insight bundles.
+            # Deep-dive charts and Gemini are deferred to /trends/deep-dive (background AJAX).
             def extract_and_visualize(t_id):
-                nonlocal charts_data, top_positive, top_negative, insights_data
-                comment_res = admin_supabase.table("reddit_comments").select("*").eq("topic_id", t_id).execute()
-                if comment_res.data:
-                    df = pd.DataFrame(comment_res.data)
+                nonlocal charts_data, charts_all, charts_reddit, charts_youtube, \
+                         insights_data, insights_all, insights_reddit, insights_youtube, \
+                         has_youtube, source_split, yt_video_cards, has_data, \
+                         top_positive, top_negative, top_positive_yt, top_negative_yt, \
+                         current_topic_id
 
-                    # Extract top viral comments for the Reddit UI component
-                    if not df[df['sentiment_label'] == 'Positive'].empty:
-                        top_positive = df[df['sentiment_label'] == 'Positive'].nlargest(1, 'score').to_dict('records')[0]
-                    if not df[df['sentiment_label'] == 'Negative'].empty:
-                        top_negative = df[df['sentiment_label'] == 'Negative'].nlargest(1, 'score').to_dict('records')[0]
+                from app.utils.insights import compute_all_insights
 
+                current_topic_id = t_id
+
+                PAGE = 1000  # Supabase PostgREST hard-caps responses at 1000 rows
+
+                all_rows = topic_cache.get(t_id)
+                if all_rows is None:
+                    all_rows = []
+                    offset = 0
                     try:
-                        vis = ElectionDataVisualizer(df)
-                        charts_data = vis.get_all_charts_data()
+                        while True:
+                            q = admin_supabase.table("comments").select(_COMMENT_COLS).eq("topic_id", t_id)
+                            page = q.order("id").range(offset, offset + PAGE - 1).execute()
+                            if not page.data:
+                                break
+                            all_rows.extend(_flatten_comment_row(r) for r in page.data)
+                            if len(page.data) < PAGE:
+                                break
+                            offset += PAGE
                     except Exception as e:
-                        flash(f"Error visualizing data: {str(e)}")
+                        print(f"[extract] Query error: {e}")
+                        return False
+                    topic_cache.set(t_id, all_rows)
+                    print(f"[cache] Fetched and cached {len(all_rows)} rows for topic_id={t_id}")
+                else:
+                    print(f"[cache] Cache hit — {len(all_rows)} rows for topic_id={t_id}")
 
+                if not all_rows:
+                    return False
+
+                df_all     = pd.DataFrame(all_rows)
+                df_reddit  = df_all[df_all["source_type"] == "reddit"].copy() \
+                             if "source_type" in df_all.columns \
+                             else df_all.copy()
+                df_youtube = df_all[df_all["source_type"] == "youtube"].copy() \
+                             if "source_type" in df_all.columns \
+                             else pd.DataFrame()
+
+                has_youtube = not df_youtube.empty
+
+                def _safe_charts(df, primary_only=False):
+                    if df is None or df.empty:
+                        return {}
                     try:
-                        from app.utils.insights import compute_all_insights
-                        insights_data = compute_all_insights(df)
+                        return ElectionDataVisualizer(df).get_all_charts_data(primary_only=primary_only)
                     except Exception as e:
-                        print(f"Insights error: {e}")
+                        print(f"[charts] Error: {e}")
+                        return {}
 
-                    return True
-                return False
+                def _safe_insights(df):
+                    if df is None or df.empty:
+                        return {}
+                    try:
+                        # No topic_name/charts_data → Gemini is skipped; deferred to deep-dive endpoint
+                        return compute_all_insights(df)
+                    except Exception as e:
+                        print(f"[insights] Error: {e}")
+                        return {}
+
+                # Only compute above-fold charts (primary_only=True skips the 11 deep-dive charts)
+                charts_all     = _safe_charts(df_all,    primary_only=True)
+                charts_reddit  = _safe_charts(df_reddit, primary_only=True)
+                insights_all    = _safe_insights(df_all)
+                insights_reddit = _safe_insights(df_reddit)
+
+                # For backward compat — Reddit tab is the primary detail view
+                charts_data   = charts_reddit
+                insights_data = insights_reddit
+
+                if has_youtube:
+                    charts_youtube   = _safe_charts(df_youtube, primary_only=True)
+                    charts_youtube["yt_video_cards"] = _build_yt_video_cards(df_youtube)
+                    yt_video_cards   = charts_youtube["yt_video_cards"]
+                    insights_youtube = _safe_insights(df_youtube)
+
+                    # YouTube viral comments
+                    yt_pos = df_youtube[df_youtube["sentiment_label"] == "Positive"]
+                    yt_neg = df_youtube[df_youtube["sentiment_label"] == "Negative"]
+                    if not yt_pos.empty:
+                        top_positive_yt = yt_pos.nlargest(1, "score").to_dict("records")[0]
+                    if not yt_neg.empty:
+                        top_negative_yt = yt_neg.nlargest(1, "score").to_dict("records")[0]
+
+                # Source split percentages for overview tab
+                total = max(len(df_all), 1)
+                source_split = {
+                    "reddit_count":  len(df_reddit),
+                    "youtube_count": len(df_youtube),
+                    "reddit_pct":    round(len(df_reddit)  / total * 100, 1),
+                    "youtube_pct":   round(len(df_youtube) / total * 100, 1),
+                }
+
+                # Top viral Reddit comments (Reddit tab — Reddit-only data)
+                pos_reddit = df_reddit[df_reddit["sentiment_label"] == "Positive"] if not df_reddit.empty else pd.DataFrame()
+                neg_reddit = df_reddit[df_reddit["sentiment_label"] == "Negative"] if not df_reddit.empty else pd.DataFrame()
+                if not pos_reddit.empty:
+                    top_positive = pos_reddit.nlargest(1, "score").to_dict("records")[0]
+                if not neg_reddit.empty:
+                    top_negative = neg_reddit.nlargest(1, "score").to_dict("records")[0]
+
+                has_data = True
+                return True
 
             # VIEW SAVED SCAN: topic_id provided → load from DB without re-scraping
             if topic_id_param and current_user_id:
-                topic_res = admin_supabase.table("search_topics") \
-                                          .select("id, name, rating, sentiment, total_comments") \
+                topic_res = admin_supabase.table("topics") \
+                                          .select("id, name") \
                                           .eq("id", topic_id_param) \
                                           .eq("user_id", current_user_id) \
                                           .execute()
                 if topic_res.data:
-                    topic_id   = topic_res.data[0]['id']
-                    topic_info = topic_res.data[0]
+                    topic_id      = topic_res.data[0]['id']
                     current_topic = topic_res.data[0]['name']
+                    # Load latest snapshot for rating display
+                    snap = admin_supabase.table("daily_snapshots") \
+                        .select("psi_rating, dominant_emotion, total_comments") \
+                        .eq("topic_id", topic_id).order("snapshot_date", desc=True).limit(1).execute()
+                    topic_info = snap.data[0] if snap.data else {}
+                    topic_info["rating"]    = topic_info.pop("psi_rating", 0)
+                    topic_info["name"]      = current_topic
+                    topic_info["sentiment"] = "Positive" if (topic_info.get("rating") or 0) > 0 else ("Negative" if (topic_info.get("rating") or 0) < 0 else "Neutral")
+                    count_res = admin_supabase.table("comments").select("id", count="exact").eq("topic_id", topic_id).execute()
+                    topic_info["total_comments"] = count_res.count or 0
                     if not extract_and_visualize(topic_id):
                         flash("No comment data found for this saved scan.")
                 else:
@@ -127,17 +293,25 @@ def trends():
 
             elif current_topic in PREDEFINED_TOPICS:
                 # 1. PREDEFINED TOPIC: Pull dynamically from relational DB schema
-                topic_res = admin_supabase.table("search_topics") \
-                                          .select("id, rating, sentiment, total_comments") \
+                topic_res = admin_supabase.table("topics") \
+                                          .select("id") \
                                           .eq("name", current_topic) \
                                           .is_("user_id", "null") \
                                           .execute()
 
                 if topic_res.data:
-                    topic_id   = topic_res.data[0]['id']
-                    topic_info = topic_res.data[0]
+                    topic_id = topic_res.data[0]['id']
+                    snap = admin_supabase.table("daily_snapshots") \
+                        .select("psi_rating, dominant_emotion, total_comments") \
+                        .eq("topic_id", topic_id).order("snapshot_date", desc=True).limit(1).execute()
+                    topic_info = snap.data[0] if snap.data else {}
+                    topic_info["rating"]    = topic_info.pop("psi_rating", 0)
+                    topic_info["name"]      = current_topic
+                    topic_info["sentiment"] = "Positive" if (topic_info.get("rating") or 0) > 0 else ("Negative" if (topic_info.get("rating") or 0) < 0 else "Neutral")
+                    count_res = admin_supabase.table("comments").select("id", count="exact").eq("topic_id", topic_id).execute()
+                    topic_info["total_comments"] = count_res.count or 0
                     if not extract_and_visualize(topic_id):
-                         flash(f"No comments found for predefined topic: {current_topic}")
+                        flash(f"No comments found for predefined topic: {current_topic}")
                 else:
                     flash(f"No database records found for preset topic: {current_topic}. Please run the seeder script first!")
                     
@@ -157,17 +331,22 @@ def trends():
                     elif existing_status == "complete":
                         # Job finished — load from DB and clear the tracker entry
                         job_tracker.clear(current_user_id, current_topic)
-                        topic_res = admin_supabase.table("search_topics") \
-                                                  .select("id, total_comments") \
+                        topic_res = admin_supabase.table("topics") \
+                                                  .select("id") \
                                                   .eq("name", current_topic) \
                                                   .eq("user_id", current_user_id) \
                                                   .execute()
                         if topic_res.data:
-                            from app.utils.analyzer import calculate_topic_rating
-                            topic_id       = topic_res.data[0]['id']
-                            total_comments = topic_res.data[0].get('total_comments', 0)
-                            rating, sentiment = calculate_topic_rating(topic_id)
-                            topic_info = {'rating': rating, 'sentiment': sentiment, 'total_comments': total_comments}
+                            topic_id = topic_res.data[0]['id']
+                            snap = admin_supabase.table("daily_snapshots") \
+                                .select("psi_rating, dominant_emotion, total_comments") \
+                                .eq("topic_id", topic_id).order("snapshot_date", desc=True).limit(1).execute()
+                            topic_info = snap.data[0] if snap.data else {}
+                            topic_info["rating"]    = topic_info.pop("psi_rating", 0)
+                            topic_info["name"]      = current_topic
+                            topic_info["sentiment"] = "Positive" if (topic_info.get("rating") or 0) > 0 else ("Negative" if (topic_info.get("rating") or 0) < 0 else "Neutral")
+                            count_res = admin_supabase.table("comments").select("id", count="exact").eq("topic_id", topic_id).execute()
+                            topic_info["total_comments"] = count_res.count or 0
                             extract_and_visualize(topic_id)
                         else:
                             flash(f"Analysis completed but data could not be loaded. Check your History.")
@@ -176,20 +355,39 @@ def trends():
                         job_tracker.clear(current_user_id, current_topic)
                         flash(f"The background analysis for '{current_topic}' failed. Please try again.")
 
-                    else:
-                        # No job running — kick off a new background thread
-                        job_tracker.mark_processing(current_user_id, current_topic)
-                        app = current_app._get_current_object()
-                        user_email     = user.get_email()
-                        user_firstname = user.get_first_name()
+                    elif existing_status is None:
+                        # No active job — check if topic already exists in DB (user re-searched)
+                        topic_res = admin_supabase.table("topics") \
+                                                  .select("id") \
+                                                  .eq("name", current_topic) \
+                                                  .eq("user_id", current_user_id) \
+                                                  .execute()
+                        if topic_res.data:
+                            topic_id = topic_res.data[0]['id']
+                            snap = admin_supabase.table("daily_snapshots") \
+                                .select("psi_rating, dominant_emotion, total_comments") \
+                                .eq("topic_id", topic_id).order("snapshot_date", desc=True).limit(1).execute()
+                            topic_info = snap.data[0] if snap.data else {}
+                            topic_info["rating"]    = topic_info.pop("psi_rating", 0)
+                            topic_info["name"]      = current_topic
+                            topic_info["sentiment"] = "Positive" if (topic_info.get("rating") or 0) > 0 else ("Negative" if (topic_info.get("rating") or 0) < 0 else "Neutral")
+                            count_res = admin_supabase.table("comments").select("id", count="exact").eq("topic_id", topic_id).execute()
+                            topic_info["total_comments"] = count_res.count or 0
+                            extract_and_visualize(topic_id)
+                        else:
+                            # Truly new topic — kick off a new background thread
+                            job_tracker.mark_processing(current_user_id, current_topic)
+                            app = current_app._get_current_object()
+                            user_email     = user.get_email()
+                            user_firstname = user.get_first_name()
 
-                        thread = threading.Thread(
-                            target=_background_analyse_user_topic,
-                            args=(app, current_user_id, user_email, user_firstname, current_topic),
-                            daemon=True,
-                        )
-                        thread.start()
-                        job_status = "processing"
+                            thread = threading.Thread(
+                                target=_background_analyse_user_topic,
+                                args=(app, current_user_id, user_email, user_firstname, current_topic),
+                                daemon=True,
+                            )
+                            thread.start()
+                            job_status = "processing"
 
     else:
         # GET request: Render completely empty to wait for user interaction
@@ -198,17 +396,127 @@ def trends():
     return render_template(
         "trends.html",
         user=user,
-        charts_data=json.dumps(charts_data),
-        insights_data=insights_data,
-        current_topic=current_topic,
+        # Overview tab (combined)
+        charts_all=json.dumps(charts_all),
+        insights_all=insights_all,
+        # Reddit tab
+        charts_data=json.dumps(charts_reddit),     # backward compat alias
+        charts_reddit=json.dumps(charts_reddit),
+        insights_data=insights_reddit,              # backward compat alias
+        insights_reddit=insights_reddit,
+        # YouTube tab
+        charts_youtube=json.dumps(charts_youtube),
+        insights_youtube=insights_youtube,
+        has_youtube=has_youtube,
+        source_split=source_split,
+        yt_video_cards=yt_video_cards,
+        # Viral comments
         top_positive=top_positive,
         top_negative=top_negative,
+        top_positive_yt=top_positive_yt,
+        top_negative_yt=top_negative_yt,
+        # Meta
+        current_topic=current_topic,
         topic_info=topic_info,
         job_status=job_status,
+        has_data=has_data,
+        topic_id_for_deep_dive=current_topic_id,
+        topic_cover_url=topic_cover_url,
     )
 
 
 PREDEFINED_TOPICS = ["Donald Trump", "The Boys", "Avengers Doomsday", "Macbook Neo", "America vs Iran"]
+
+
+@main_bp.route("/trends/deep-dive", methods=["POST"])
+def trends_deep_dive():
+    """Background AJAX endpoint — computes deep-dive charts + Gemini for all sources.
+
+    Called automatically by the browser after the initial trends page renders.
+    Returns JSON consumed by initDeepDiveCharts() in the template.
+    """
+    import pandas as _pd
+    from app.utils.insights import compute_all_insights
+    from app.utils.gemini_insights import get_deep_dive_insights
+
+    topic_id   = request.form.get("topic_id", "")
+    topic_name = request.form.get("topic_name", "")
+
+    if not topic_id:
+        return {"error": "missing topic_id"}, 400
+
+    PAGE = 1000
+
+    all_rows = topic_cache.get(topic_id)
+    if all_rows is None:
+        all_rows, offset = [], 0
+        while True:
+            q = admin_supabase.table("comments").select(_COMMENT_COLS).eq("topic_id", topic_id)
+            page = q.order("id").range(offset, offset + PAGE - 1).execute()
+            if not page.data:
+                break
+            all_rows.extend(_flatten_comment_row(r) for r in page.data)
+            if len(page.data) < PAGE:
+                break
+            offset += PAGE
+        topic_cache.set(topic_id, all_rows)
+        print(f"[cache] deep-dive: fetched and cached {len(all_rows)} rows for topic_id={topic_id}")
+    else:
+        print(f"[cache] deep-dive: cache hit — {len(all_rows)} rows for topic_id={topic_id}")
+
+    if not all_rows:
+        return {"error": "no data"}, 404
+
+    df_all     = _pd.DataFrame(all_rows)
+    df_reddit  = df_all[df_all["source_type"] == "reddit"].copy() \
+                 if "source_type" in df_all.columns else df_all.copy()
+    df_youtube = df_all[df_all["source_type"] == "youtube"].copy() \
+                 if "source_type" in df_all.columns else _pd.DataFrame()
+
+    def _dd_charts(df, label_source=None):
+        if df is None or df.empty:
+            return {}
+        try:
+            vis = ElectionDataVisualizer(df)
+            charts = vis.get_all_charts_data(primary_only=False)
+            if label_source == "youtube":
+                charts["chart17_community_breakdown"] = \
+                    vis._get_community_breakdown(label_source="youtube")
+            return charts
+        except Exception as e:
+            print(f"[deep-dive] charts error: {e}")
+            return {}
+
+    charts_all     = _dd_charts(df_all)
+    charts_reddit  = _dd_charts(df_reddit)
+    charts_youtube = _dd_charts(df_youtube, label_source="youtube")
+
+    # Gemini: separate call per source so each tab gets unique AI insights
+    gemini_all = gemini_reddit = gemini_youtube = {}
+    try:
+        gemini_all = get_deep_dive_insights(topic_name, compute_all_insights(df_all), charts_all)
+    except Exception as e:
+        print(f"[deep-dive] Gemini all error: {e}")
+    try:
+        if not df_reddit.empty:
+            gemini_reddit = get_deep_dive_insights(topic_name, compute_all_insights(df_reddit), charts_reddit)
+    except Exception as e:
+        print(f"[deep-dive] Gemini reddit error: {e}")
+    try:
+        if not df_youtube.empty:
+            gemini_youtube = get_deep_dive_insights(topic_name, compute_all_insights(df_youtube), charts_youtube)
+    except Exception as e:
+        print(f"[deep-dive] Gemini youtube error: {e}")
+
+    return {
+        "charts_all":     charts_all,
+        "charts_reddit":  charts_reddit,
+        "charts_youtube": charts_youtube,
+        "gemini":         gemini_all,
+        "gemini_all":     gemini_all,
+        "gemini_reddit":  gemini_reddit,
+        "gemini_youtube": gemini_youtube,
+    }
 
 
 @main_bp.route("/compare", methods=["GET", "POST"])
@@ -221,10 +529,10 @@ def compare():
     suggestions = [{'name': t, 'kind': 'featured'} for t in PREDEFINED_TOPICS]
     if user:
         try:
-            res = admin_supabase.table("search_topics") \
+            res = admin_supabase.table("topics") \
                                 .select("name") \
                                 .eq("user_id", current_user_id) \
-                                .order("last_updated", desc=True) \
+                                .order("created_at", desc=True) \
                                 .execute()
             if res.data:
                 existing_names = {s['name'] for s in suggestions}
@@ -235,6 +543,7 @@ def compare():
             pass
 
     comparison_data = None
+    gemini_compare  = {}
     topic_a_name = None
     topic_b_name = None
 
@@ -246,25 +555,48 @@ def compare():
 
             def load_topic_for_compare(topic_name):
                 """Return (df, info_dict) from DB or by scraping fresh (max 500 comments)."""
+                def _snap_to_info(t_id, t_name):
+                    snap = admin_supabase.table("daily_snapshots") \
+                        .select("psi_rating, total_comments, dominant_emotion") \
+                        .eq("topic_id", t_id).order("snapshot_date", desc=True).limit(1).execute()
+                    info = snap.data[0] if snap.data else {}
+                    info["id"]         = t_id
+                    info["name"]       = t_name
+                    info["rating"]     = info.pop("psi_rating", 0)
+                    info["sentiment"]  = "Positive" if (info.get("rating") or 0) > 0 else ("Negative" if (info.get("rating") or 0) < 0 else "Neutral")
+                    return info
+
+                def _fetch_all_comments(tid):
+                    PAGE = 1000
+                    rows, off = [], 0
+                    while True:
+                        p = admin_supabase.table("comments").select(_COMMENT_COLS) \
+                            .eq("topic_id", tid).order("id").range(off, off + PAGE - 1).execute()
+                        if not p.data: break
+                        rows.extend(_flatten_comment_row(r) for r in p.data)
+                        if len(p.data) < PAGE: break
+                        off += PAGE
+                    return rows
+
                 # 1. Predefined topic
                 if topic_name in PREDEFINED_TOPICS:
-                    res = admin_supabase.table("search_topics").select("*") \
+                    res = admin_supabase.table("topics").select("id") \
                                         .eq("name", topic_name).is_("user_id", "null").execute()
                     if res.data:
                         t_id = res.data[0]['id']
-                        cr = admin_supabase.table("reddit_comments").select("*").eq("topic_id", t_id).execute()
-                        if cr.data:
-                            return pd.DataFrame(cr.data), res.data[0]
+                        rows = _fetch_all_comments(t_id)
+                        if rows:
+                            return pd.DataFrame(rows), _snap_to_info(t_id, topic_name)
 
                 # 2. User's saved history
                 if current_user_id:
-                    res = admin_supabase.table("search_topics").select("*") \
+                    res = admin_supabase.table("topics").select("id") \
                                         .eq("name", topic_name).eq("user_id", current_user_id).execute()
                     if res.data:
                         t_id = res.data[0]['id']
-                        cr = admin_supabase.table("reddit_comments").select("*").eq("topic_id", t_id).execute()
-                        if cr.data:
-                            return pd.DataFrame(cr.data), res.data[0]
+                        rows = _fetch_all_comments(t_id)
+                        if rows:
+                            return pd.DataFrame(rows), _snap_to_info(t_id, topic_name)
 
                 # 3. New topic — requires login to save
                 if not current_user_id:
@@ -273,24 +605,21 @@ def compare():
 
                 from app.utils.fetcher import get_reddit_comments
                 from app.utils.hf_analyzer import process_and_store_comments
-                from app.utils.analyzer import calculate_topic_rating
 
                 df = get_reddit_comments(topic_name, limit_posts=100, max_comments=500,
                                          subreddit_name="all", topic_name=topic_name)
                 if df.empty:
                     return None, None
 
-                process_and_store_comments(topic_name, df, current_user_id)
+                process_and_store_comments(topic_name, df, current_user_id, mode="local")
 
-                res = admin_supabase.table("search_topics").select("*") \
+                res = admin_supabase.table("topics").select("id") \
                                     .eq("name", topic_name).eq("user_id", current_user_id).execute()
                 if res.data:
                     t_id = res.data[0]['id']
-                    calculate_topic_rating(t_id)
-                    res2 = admin_supabase.table("search_topics").select("*").eq("id", t_id).execute()
-                    cr   = admin_supabase.table("reddit_comments").select("*").eq("topic_id", t_id).execute()
-                    if cr.data and res2.data:
-                        return pd.DataFrame(cr.data), res2.data[0]
+                    rows = _fetch_all_comments(t_id)
+                    if rows:
+                        return pd.DataFrame(rows), _snap_to_info(t_id, topic_name)
 
                 return None, None
 
@@ -299,7 +628,31 @@ def compare():
 
             if df_a is not None and df_b is not None:
                 from app.utils.comparator import build_comparison_data
-                comparison_data = build_comparison_data(df_a, info_a, df_b, info_b)
+
+                def _src(df, s):
+                    if 'source_type' in df.columns:
+                        sub = df[df['source_type'] == s].copy()
+                        return sub if not sub.empty else pd.DataFrame(columns=df.columns)
+                    return pd.DataFrame()
+
+                df_a_r, df_b_r = _src(df_a, 'reddit'),  _src(df_b, 'reddit')
+                df_a_y, df_b_y = _src(df_a, 'youtube'), _src(df_b, 'youtube')
+                cmp_reddit  = build_comparison_data(df_a_r, info_a, df_b_r, info_b) if not (df_a_r.empty and df_b_r.empty) else None
+                cmp_youtube = build_comparison_data(df_a_y, info_a, df_b_y, info_b) if not (df_a_y.empty and df_b_y.empty) else None
+                cmp_overall = build_comparison_data(df_a, info_a, df_b, info_b)
+                comparison_data = {
+                    'overall': cmp_overall,
+                    'reddit':  cmp_reddit,
+                    'youtube': cmp_youtube,
+                }
+
+                # Gemini AI overviews (one call using overall data)
+                try:
+                    from app.utils.gemini_insights import get_compare_insights
+                    gemini_compare = get_compare_insights(cmp_overall, topic_a_name, topic_b_name)
+                except Exception as e:
+                    print(f"[compare] Gemini error: {e}")
+                    gemini_compare = {}
             else:
                 if df_a is None:
                     flash(f"Could not load data for '{topic_a_name}'. Run a full analysis first.")
@@ -313,6 +666,7 @@ def compare():
         topic_a_name=topic_a_name,
         topic_b_name=topic_b_name,
         comparison_json=json.dumps(comparison_data) if comparison_data else None,
+        gemini_compare=gemini_compare if comparison_data else None,
     )
 
 
@@ -355,7 +709,7 @@ def profile():
     scan_count = None
     if user.get_role().lower() != "admin":
         try:
-            res = admin_supabase.table("search_topics").select("id", count="exact") \
+            res = admin_supabase.table("topics").select("id", count="exact") \
                                 .eq("user_id", user.get_user_id()).execute()
             scan_count = res.count or 0
         except:
@@ -375,12 +729,30 @@ def history():
 
     saved_scans = []
     try:
-        res = admin_supabase.table("search_topics") \
-                            .select("*") \
+        res = admin_supabase.table("topics") \
+                            .select("id, name, category, created_at") \
                             .eq("user_id", user.get_user_id()) \
-                            .order("last_updated", desc=True) \
+                            .order("created_at", desc=True) \
                             .execute()
         if res.data:
+            for t in res.data:
+                snap = admin_supabase.table("daily_snapshots") \
+                    .select("psi_rating, dominant_emotion, total_comments, snapshot_date") \
+                    .eq("topic_id", t["id"]) \
+                    .order("snapshot_date", desc=True).limit(1).execute()
+                if snap.data:
+                    s = snap.data[0]
+                    t["rating"]         = s.get("psi_rating", 0)
+                    t["total_comments"] = s.get("total_comments", 0)
+                    t["dominant_emotion"] = s.get("dominant_emotion", "neutral")
+                    t["last_updated"]   = s.get("snapshot_date", t.get("created_at", ""))
+                else:
+                    t["rating"]         = 0
+                    t["total_comments"] = 0
+                    t["dominant_emotion"] = "neutral"
+                    t["last_updated"]   = t.get("created_at", "")
+                r = t["rating"] or 0
+                t["sentiment"] = "Positive" if r > 0 else ("Negative" if r < 0 else "Neutral")
             saved_scans = res.data
     except Exception as e:
         flash(f"Could not load scan history: {e}")
@@ -437,46 +809,33 @@ def api_delete_topic(topic_id):
 import threading
 
 
+def _build_yt_video_cards(df_youtube: pd.DataFrame) -> list:
+    """Build per-video summary dicts for the YouTube tab video cards."""
+    cards = []
+    if df_youtube.empty or "source_id" not in df_youtube.columns:
+        return cards
+    for video_id, group in df_youtube.groupby("source_id"):
+        title = group["post_title"].iloc[0] if "post_title" in group.columns else video_id
+        dominant_emotion = (
+            group["emotion_label"].mode()[0]
+            if "emotion_label" in group.columns and not group.empty
+            else "neutral"
+        )
+        total = len(group)
+        pos_pct = round((group["sentiment_label"] == "Positive").sum() / total * 100, 1) if total else 0
+        cards.append({
+            "video_id":         str(video_id),
+            "title":            (title[:80] + "…") if len(title) > 80 else title,
+            "comment_count":    total,
+            "dominant_emotion": dominant_emotion,
+            "pos_pct":          pos_pct,
+        })
+    return sorted(cards, key=lambda x: x["comment_count"], reverse=True)
+
+
 def _background_analyse_user_topic(app, user_id, user_email, first_name, topic_name):
-    """Scrape → analyse → store → email for a user's custom topic."""
-    from app.utils import job_tracker
-    from app.utils.fetcher import get_reddit_comments
-    from app.utils.hf_analyzer import process_and_store_comments
-    from app.utils.analyzer import calculate_topic_rating
-    from app.utils.mailer import send_analysis_ready_email
-
-    with app.app_context():
-        try:
-            print(f"[bg] Starting analysis for user={user_id} topic='{topic_name}'")
-            df = get_reddit_comments(
-                topic_name, limit_posts=250, max_comments=2000,
-                subreddit_name="all", topic_name=topic_name
-            )
-
-            if df.empty:
-                print(f"[bg] No Reddit data found for '{topic_name}'")
-                job_tracker.mark_failed(user_id, topic_name)
-                return
-
-            process_and_store_comments(topic_name, df, user_id)
-
-            topic_res = admin_supabase.table("search_topics") \
-                                      .select("id") \
-                                      .eq("name", topic_name) \
-                                      .eq("user_id", user_id) \
-                                      .execute()
-            if topic_res.data:
-                calculate_topic_rating(topic_res.data[0]["id"])
-
-            job_tracker.mark_complete(user_id, topic_name)
-            print(f"[bg] Analysis complete for '{topic_name}' — sending email to {user_email}")
-
-            base_url = app.config.get("APP_BASE_URL", "http://127.0.0.1:5000")
-            send_analysis_ready_email(user_email, first_name, topic_name, base_url)
-
-        except Exception as e:
-            print(f"[bg] Analysis failed for '{topic_name}': {e}")
-            job_tracker.mark_failed(user_id, topic_name)
+    """Delegates to app.services.analysis_service.run_background_analysis."""
+    run_background_analysis(app, user_id, user_email, first_name, topic_name)
 
 
 @main_bp.route("/api/topic_status")
@@ -500,22 +859,13 @@ def api_topic_status():
 def background_run_topic(topic_name):
     from app.utils.fetcher import get_reddit_comments
     from app.utils.hf_analyzer import process_and_store_comments
-    from app.utils.analyzer import calculate_topic_rating
-    
+
     try:
         print(f"Starting Background Analysis Thread for: {topic_name}")
-        df = get_reddit_comments(topic_name, limit_posts=250, max_comments=2000, subreddit_name="all", topic_name=topic_name)
+        df = get_reddit_comments(topic_name, limit_posts=100, max_comments=5000, subreddit_name="all", topic_name=topic_name)
         if not df.empty:
             # Admin rerun is always for predefined topics — no user ownership
-            process_and_store_comments(topic_name, df, user_id=None)
-
-            # Find the predefined topic row to recalculate its rating
-            res = admin_supabase.table("search_topics").select("id") \
-                                .eq("name", topic_name) \
-                                .is_("user_id", "null") \
-                                .execute()
-            if res.data:
-                calculate_topic_rating(res.data[0]['id'])
+            process_and_store_comments(topic_name, df, user_id=None, mode="local")
         print(f"Background thread finished efficiently for: {topic_name}")
     except Exception as e:
         print(f"Background rerun failed for {topic_name}: {e}")
@@ -529,7 +879,7 @@ def api_delete_predefined_topic(topic_id):
 
     try:
         # Safety: only delete rows that are predefined (user_id IS NULL)
-        res = admin_supabase.table("search_topics") \
+        res = admin_supabase.table("topics") \
                             .delete() \
                             .eq("id", topic_id) \
                             .is_("user_id", "null") \

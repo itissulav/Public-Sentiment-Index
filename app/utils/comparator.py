@@ -1,20 +1,22 @@
+import json
 import pandas as pd
-from app.utils.insights import get_keyword_split
+from app.utils.insights import get_keyword_split, get_emotion_distribution, _expand_emotion_scores
+
+EMOTION_LABELS = ["positive", "negative", "neutral"]
 
 
 def _sentiment_split_pct(df):
     total = len(df)
     if total == 0:
-        return [0.0, 0.0, 0.0]
+        return [0.0, 0.0]
     pos = int((df['sentiment_label'] == 'Positive').sum())
     neg = int((df['sentiment_label'] == 'Negative').sum())
-    neu = total - pos - neg
-    return [round(pos / total * 100, 1), round(neg / total * 100, 1), round(neu / total * 100, 1)]
+    return [round(pos / total * 100, 1), round(neg / total * 100, 1)]
 
 
 def _avg_upvotes_by_sentiment(df):
     out = []
-    for s in ['Positive', 'Negative', 'Neutral']:
+    for s in ['Positive', 'Negative']:
         mask = df['sentiment_label'] == s
         if mask.any():
             avg = df.loc[mask, 'score'].mean()
@@ -24,12 +26,62 @@ def _avg_upvotes_by_sentiment(df):
     return out
 
 
-def _daily_positive_pct(df):
-    """Returns (dates_list, values_list) — daily % of comments that are Positive."""
-    if 'timestamp' not in df.columns:
+def _sentiment_momentum(df, window=7):
+    """7-day rolling average of daily positive %."""
+    dates, vals = _daily_positive_pct(df)
+    if not dates:
+        return [], []
+    s = pd.Series(vals, index=pd.to_datetime(dates))
+    rolled = s.rolling(window, min_periods=1).mean().round(1)
+    return [str(d.date()) for d in rolled.index], [float(v) for v in rolled.tolist()]
+
+
+def _cumulative_volume(df):
+    """Cumulative comment count by date."""
+    col = _date_col(df)
+    if col is None:
         return [], []
     df = df.copy()
-    df['date'] = pd.to_datetime(df['timestamp'], errors='coerce', utc=True).dt.date
+    df['date'] = pd.to_datetime(df[col], errors='coerce', utc=True).dt.date
+    df = df.dropna(subset=['date'])
+    if df.empty:
+        return [], []
+    daily = df.groupby('date').size().sort_index()
+    cumsum = daily.cumsum()
+    return [str(d) for d in cumsum.index.tolist()], [int(v) for v in cumsum.tolist()]
+
+
+def _text_length_by_sentiment(df):
+    """Average text length (chars) by sentiment label: [positive_avg, negative_avg]."""
+    out = []
+    for s in ['Positive', 'Negative']:
+        if 'text' in df.columns and 'sentiment_label' in df.columns:
+            mask = df['sentiment_label'] == s
+            if mask.any():
+                avg = df.loc[mask, 'text'].str.len().mean()
+                out.append(round(float(avg), 1) if not pd.isna(avg) else 0.0)
+            else:
+                out.append(0.0)
+        else:
+            out.append(0.0)
+    return out
+
+
+def _date_col(df):
+    """Return the best available date column name."""
+    for col in ('published_at', 'timestamp', 'created_at'):
+        if col in df.columns:
+            return col
+    return None
+
+
+def _daily_positive_pct(df):
+    """Returns (dates_list, values_list) — daily % of comments that are Positive."""
+    col = _date_col(df)
+    if col is None:
+        return [], []
+    df = df.copy()
+    df['date'] = pd.to_datetime(df[col], errors='coerce', utc=True).dt.date
     df = df.dropna(subset=['date'])
     if df.empty:
         return [], []
@@ -45,10 +97,11 @@ def _daily_positive_pct(df):
 
 def _daily_volatility(df):
     """Returns (dates_list, values_list) — daily std dev of sentiment direction."""
-    if 'timestamp' not in df.columns:
+    col = _date_col(df)
+    if col is None:
         return [], []
     df = df.copy()
-    df['date'] = pd.to_datetime(df['timestamp'], errors='coerce', utc=True).dt.date
+    df['date'] = pd.to_datetime(df[col], errors='coerce', utc=True).dt.date
     df = df.dropna(subset=['date'])
     if df.empty:
         return [], []
@@ -60,19 +113,21 @@ def _daily_volatility(df):
 
 
 def _posting_hours(df):
-    if 'timestamp' not in df.columns:
+    col = _date_col(df)
+    if col is None:
         return [0] * 24
     df = df.copy()
-    df['hour'] = pd.to_datetime(df['timestamp'], errors='coerce', utc=True).dt.hour
+    df['hour'] = pd.to_datetime(df[col], errors='coerce', utc=True).dt.hour
     counts = df.groupby('hour').size().reindex(range(24), fill_value=0)
     return [int(v) for v in counts.tolist()]
 
 
 def _weekly_rhythm(df):
-    if 'timestamp' not in df.columns:
+    col = _date_col(df)
+    if col is None:
         return [0] * 7
     df = df.copy()
-    df['dow'] = pd.to_datetime(df['timestamp'], errors='coerce', utc=True).dt.dayofweek
+    df['dow'] = pd.to_datetime(df[col], errors='coerce', utc=True).dt.dayofweek
     counts = df.groupby('dow').size().reindex(range(7), fill_value=0)
     return [int(v) for v in counts.tolist()]
 
@@ -93,9 +148,11 @@ def build_comparison_data(df_a, info_a, df_b, info_b):
     """
     Build the full comparison chart data dict for two topics.
 
-    df_a / df_b  : DataFrames from reddit_comments
-    info_a / info_b : dicts from search_topics rows (must have name, rating, sentiment, total_comments)
+    df_a / df_b  : DataFrames from comments table
+    info_a / info_b : dicts from topics rows (must have name, rating, sentiment, total_comments)
     """
+    df_a = _expand_emotion_scores(df_a)
+    df_b = _expand_emotion_scores(df_b)
     data = {
         'topic_a': {
             'name':           info_a.get('name', 'Topic A'),
@@ -113,14 +170,14 @@ def build_comparison_data(df_a, info_a, df_b, info_b):
 
     # 1. Sentiment split (%)
     data['chart_split'] = {
-        'labels':  ['Positive', 'Negative', 'Neutral'],
+        'labels':  ['Positive', 'Negative'],
         'topic_a': _sentiment_split_pct(df_a),
         'topic_b': _sentiment_split_pct(df_b),
     }
 
     # 2. Average upvotes by sentiment
     data['chart_upvotes'] = {
-        'labels':  ['Positive', 'Negative', 'Neutral'],
+        'labels':  ['Positive', 'Negative'],
         'topic_a': _avg_upvotes_by_sentiment(df_a),
         'topic_b': _avg_upvotes_by_sentiment(df_b),
     }
@@ -154,5 +211,36 @@ def build_comparison_data(df_a, info_a, df_b, info_b):
     # 7. Keywords (love / hate) for each topic separately
     data['keywords_a'] = get_keyword_split(df_a, top_n=10)
     data['keywords_b'] = get_keyword_split(df_b, top_n=10)
+
+    # 8. Emotion distribution
+    emo_a = get_emotion_distribution(df_a)
+    emo_b = get_emotion_distribution(df_b)
+    all_labels = EMOTION_LABELS
+    map_a = dict(zip(emo_a['labels'], emo_a['values'])) if emo_a else {}
+    map_b = dict(zip(emo_b['labels'], emo_b['values'])) if emo_b else {}
+    data['chart_emotions'] = {
+        'labels':  [e.capitalize() for e in all_labels],
+        'topic_a': [round(map_a.get(e, 0.0), 4) for e in all_labels],
+        'topic_b': [round(map_b.get(e, 0.0), 4) for e in all_labels],
+    }
+
+    # 9. Sentiment momentum (7-day rolling avg)
+    da, va = _sentiment_momentum(df_a)
+    db, vb = _sentiment_momentum(df_b)
+    labels, vals_a, vals_b = _align_timeseries(da, va, db, vb)
+    data['chart_momentum'] = {'labels': labels, 'topic_a': vals_a, 'topic_b': vals_b}
+
+    # 10. Cumulative volume
+    da, va = _cumulative_volume(df_a)
+    db, vb = _cumulative_volume(df_b)
+    labels, vals_a, vals_b = _align_timeseries(da, va, db, vb)
+    data['chart_cumulative'] = {'labels': labels, 'topic_a': vals_a, 'topic_b': vals_b}
+
+    # 11. Text length by sentiment
+    data['chart_text_length'] = {
+        'labels':  ['Positive', 'Negative'],
+        'topic_a': _text_length_by_sentiment(df_a),
+        'topic_b': _text_length_by_sentiment(df_b),
+    }
 
     return data

@@ -82,7 +82,7 @@
 
           <!-- Action Buttons -->
           <div class="scan-actions">
-            <form method="POST" action="{{ url_for('main.trends') }}" style="flex:1;">
+            <form method="POST" action="{{ url_for('main.trends') }}" style="flex:1;" onsubmit="showHistoryLoader('Loading your analysis…')">
               <input type="hidden" name="topic"    value="{{ scan.name }}">
               <input type="hidden" name="topic_id" value="{{ scan.id }}">
               <button type="submit" class="btn-view">
@@ -91,7 +91,7 @@
             </form>
 
             <form method="POST" action="{{ url_for('main.trends') }}" style="flex:1;"
-                  onsubmit="this.querySelector('button').textContent='Queuing…'; this.querySelector('button').disabled=true;">
+                  onsubmit="showHistoryLoader('Running fresh analysis…'); this.querySelector('button').textContent='Queuing…'; this.querySelector('button').disabled=true;">
               <input type="hidden" name="topic" value="{{ scan.name }}">
               <button type="submit" class="btn-reanalyse">
                 Analyse Again
@@ -115,4 +115,26 @@
   {% endif %}
 
 </div>
+
+<!-- Loading overlay — shown when navigating to analysis from history -->
+<div id="history-loader" style="display:none;position:fixed;inset:0;background:rgba(8,12,20,0.92);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:20px;">
+  <p id="history-loader-msg" style="color:#e2e8f0;font-size:1.05rem;font-weight:500;letter-spacing:0.03em;margin:0;"></p>
+  <div style="width:300px;height:4px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;">
+    <div id="history-loader-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#00f2fe,#4facfe);border-radius:4px;"></div>
+  </div>
+  <p style="color:#475569;font-size:0.82rem;margin:0;">This may take a few seconds…</p>
+</div>
+
+<script>
+function showHistoryLoader(msg) {
+  var o = document.getElementById('history-loader');
+  document.getElementById('history-loader-msg').textContent = msg || 'Loading…';
+  o.style.display = 'flex';
+  var bar = document.getElementById('history-loader-bar');
+  bar.style.transition = 'none'; bar.style.width = '0%';
+  void bar.offsetWidth;
+  bar.style.transition = 'width 3s ease-out'; bar.style.width = '75%';
+  setTimeout(function() { bar.style.transition = 'width 10s ease-out'; bar.style.width = '93%'; }, 3200);
+}
+</script>
 {% endblock %}

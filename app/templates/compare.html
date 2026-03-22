@@ -7,9 +7,9 @@
 
 {% block content %}
 
-<!-- Suggestions data for custom dropdown -->
-<script>
-  const SUGGESTIONS = {{ suggestions | tojson | safe }};
+<!-- Template data for compare.js (keeps Jinja2 variables out of external scripts) -->
+<script type="application/json" id="psi-compare-data">
+  {"suggestions": {{ suggestions | tojson }}, "comparison": {% if comparison_json %}{{ comparison_json | safe }}{% else %}null{% endif %}}
 </script>
 
 <!-- ============================================================
@@ -86,130 +86,292 @@
 
 {% if comparison_json %}
 <!-- ============================================================
-     RESULTS
+     RESULTS — tabbed by source
      ============================================================ -->
-<div class="compare-results">
 
-  <!-- ── HERO: VS BANNER ───────────────────────────────────── -->
-  {% set cd = comparison_json | safe %}
-  {# We read from JS — render the hero via Jinja since we have topic_a_name / topic_b_name #}
-  {% set topic_images = {
-    "Donald Trump":      "donaldtrump.png",
-    "The Boys":          "theboys.png",
-    "Avengers Doomsday": "avengersdoomsday.png",
-    "Macbook Neo":       "macbookneo.png",
-    "America vs Iran":   "americavsiran.png"
-  } %}
-
-  <!-- Hero is rendered by JS using the JSON data for ratings -->
-  <div class="compare-hero" id="compareHero">
-    <!-- JS fills this in -->
-  </div>
-
-  <!-- ── SECTION 1: SIDE-BY-SIDE OVERVIEW ─────────────────── -->
+{# ── Macro: chart canvas grid + AI insight blurbs for one source panel ── #}
+{% macro compare_charts(p, g) %}
   <div class="c-section-header">
     <span class="c-section-title">Sentiment Overview</span>
     <span class="c-section-desc">How each community feels about its topic</span>
   </div>
-
   <div class="c-grid">
     <div class="c-card">
       <div class="c-card-header">
         <h3 class="c-card-title">Sentiment Split</h3>
-        <p class="c-card-sub">% of comments that are Positive / Negative / Neutral — a direct head-to-head comparison of public mood</p>
+        <p class="c-card-sub">% of comments that are Positive vs Negative — a direct head-to-head comparison of public mood</p>
       </div>
-      <div class="c-chart-body"><canvas id="chartSplit"></canvas></div>
+      <div class="c-chart-body"><canvas id="{{ p }}chartSplit"></canvas></div>
     </div>
-
     <div class="c-card">
       <div class="c-card-header">
         <h3 class="c-card-title">Engagement by Emotion</h3>
-        <p class="c-card-sub">Average upvotes per comment type — which emotion the algorithm rewards for each topic</p>
+        <p class="c-card-sub">Average upvotes for Positive vs Negative comments — which emotion the algorithm rewards for each topic</p>
       </div>
-      <div class="c-chart-body"><canvas id="chartUpvotes"></canvas></div>
+      <div class="c-chart-body"><canvas id="{{ p }}chartUpvotes"></canvas></div>
     </div>
+    {% if g and g.sentiment_gap %}
+    <div class="c-ai-insight full">
+      <span class="c-ai-label">AI Insight</span>
+      <p class="c-ai-text">{{ g.sentiment_gap }}</p>
+    </div>
+    {% endif %}
   </div>
 
-  <!-- ── SECTION 2: OPINION OVER TIME ─────────────────────── -->
   <div class="c-section-header">
     <span class="c-section-title">Opinion Over Time</span>
     <span class="c-section-desc">How public sentiment evolved — diverging lines show one topic gaining/losing favour relative to the other</span>
   </div>
-
   <div class="c-grid">
     <div class="c-card full">
       <div class="c-card-header">
         <h3 class="c-card-title">Daily Positive % — Side by Side</h3>
         <p class="c-card-sub">When one line climbs and the other falls, that's the moment public opinion shifted for that topic</p>
       </div>
-      <div class="c-chart-body tall"><canvas id="chartTimeline"></canvas></div>
+      <div class="c-chart-body tall"><canvas id="{{ p }}chartTimeline"></canvas></div>
     </div>
-
     <div class="c-card full">
       <div class="c-card-header">
         <h3 class="c-card-title">Volatility Comparison</h3>
         <p class="c-card-sub">Emotional turbulence per day — spikes mean controversy; a flat line means stable, settled opinion</p>
       </div>
-      <div class="c-chart-body"><canvas id="chartVolatility"></canvas></div>
+      <div class="c-chart-body"><canvas id="{{ p }}chartVolatility"></canvas></div>
+    </div>
+    {% if g and g.timeline_compare %}
+    <div class="c-ai-insight full">
+      <span class="c-ai-label">AI Insight</span>
+      <p class="c-ai-text">{{ g.timeline_compare }}</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="c-section-header">
+    <span class="c-section-title">Growth &amp; Momentum</span>
+    <span class="c-section-desc">7-day smoothed sentiment trend and total comment accumulation — which topic built a bigger audience and kept it</span>
+  </div>
+  <div class="c-grid">
+    <div class="c-card full">
+      <div class="c-card-header">
+        <h3 class="c-card-title">Sentiment Momentum (7-day rolling avg)</h3>
+        <p class="c-card-sub">Smoothed positive % — removes daily noise to reveal the true directional trend for each topic</p>
+      </div>
+      <div class="c-chart-body tall"><canvas id="{{ p }}chartMomentum"></canvas></div>
+    </div>
+    <div class="c-card full">
+      <div class="c-card-header">
+        <h3 class="c-card-title">Cumulative Comment Volume</h3>
+        <p class="c-card-sub">Total comments collected over time — steeper slope means faster-growing discussion</p>
+      </div>
+      <div class="c-chart-body"><canvas id="{{ p }}chartCumulative"></canvas></div>
     </div>
   </div>
 
-  <!-- ── SECTION 3: WHAT PEOPLE SAY ───────────────────────── -->
   <div class="c-section-header">
     <span class="c-section-title">What People Are Talking About</span>
     <span class="c-section-desc">Top keywords from positive and negative comments — the real reasons behind each topic's sentiment</span>
   </div>
 
-  <div class="c-grid">
-    <!-- Topic A keywords -->
-    <div class="c-card">
-      <div class="c-card-header kw-header-a">
-        <h3 class="c-card-title" id="kwTitleA">Topic A — Keywords</h3>
-        <p class="c-card-sub">Left: praised aspects &nbsp;·&nbsp; Right: criticised aspects</p>
+  <!-- Keyword phrase cards — Topic A -->
+  <div class="c-kw-phrase-section">
+    <div class="c-kw-phrase-header">
+      <span class="c-kw-phrase-topic-label c-label-a" id="{{ p }}kwPhraseHeadA">Topic A</span>
+      <span class="c-kw-phrase-sub">What the community actually said</span>
+    </div>
+    <div class="c-kw-phrase-cols">
+      <div class="c-kw-phrase-col">
+        <p class="c-kw-col-label pos">What they love</p>
+        <div class="kw-list" id="{{ p }}kwCardsAPos"></div>
       </div>
-      <div class="kw-pair">
-        <div class="c-chart-body kw-half"><canvas id="chartKwAPos"></canvas></div>
-        <div class="kw-divider"></div>
-        <div class="c-chart-body kw-half"><canvas id="chartKwANeg"></canvas></div>
+      <div class="c-kw-phrase-col">
+        <p class="c-kw-col-label neg">What they criticise</p>
+        <div class="kw-list" id="{{ p }}kwCardsANeg"></div>
       </div>
     </div>
+    {% if g and (g.keywords_a_love or g.keywords_a_criticise) %}
+    <div class="c-kw-ai-row">
+      {% if g.keywords_a_love %}
+      <div class="c-kw-ai pos">
+        <span class="c-ai-label">AI — What they love</span>
+        <p class="c-ai-text">{{ g.keywords_a_love }}</p>
+      </div>
+      {% endif %}
+      {% if g.keywords_a_criticise %}
+      <div class="c-kw-ai neg">
+        <span class="c-ai-label">AI — What they criticise</span>
+        <p class="c-ai-text">{{ g.keywords_a_criticise }}</p>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
 
-    <!-- Topic B keywords -->
+  <!-- Keyword phrase cards — Topic B -->
+  <div class="c-kw-phrase-section">
+    <div class="c-kw-phrase-header">
+      <span class="c-kw-phrase-topic-label c-label-b" id="{{ p }}kwPhraseHeadB">Topic B</span>
+      <span class="c-kw-phrase-sub">What the community actually said</span>
+    </div>
+    <div class="c-kw-phrase-cols">
+      <div class="c-kw-phrase-col">
+        <p class="c-kw-col-label pos">What they love</p>
+        <div class="kw-list" id="{{ p }}kwCardsBPos"></div>
+      </div>
+      <div class="c-kw-phrase-col">
+        <p class="c-kw-col-label neg">What they criticise</p>
+        <div class="kw-list" id="{{ p }}kwCardsBNeg"></div>
+      </div>
+    </div>
+    {% if g and (g.keywords_b_love or g.keywords_b_criticise) %}
+    <div class="c-kw-ai-row">
+      {% if g.keywords_b_love %}
+      <div class="c-kw-ai pos">
+        <span class="c-ai-label">AI — What they love</span>
+        <p class="c-ai-text">{{ g.keywords_b_love }}</p>
+      </div>
+      {% endif %}
+      {% if g.keywords_b_criticise %}
+      <div class="c-kw-ai neg">
+        <span class="c-ai-label">AI — What they criticise</span>
+        <p class="c-ai-text">{{ g.keywords_b_criticise }}</p>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Original chart-based keyword display (folded under Advanced) -->
+  <details class="c-advanced-fold">
+    <summary class="c-advanced-toggle">
+      <span>Keyword Bar Charts</span>
+      <span class="c-advanced-sub">frequency breakdown by mention count</span>
+    </summary>
+    <div class="c-grid c-advanced-inner">
     <div class="c-card">
-      <div class="c-card-header kw-header-b">
-        <h3 class="c-card-title" id="kwTitleB">Topic B — Keywords</h3>
+      <div class="c-card-header kw-header-a">
+        <h3 class="c-card-title" id="{{ p }}kwTitleA">Topic A — Keywords</h3>
         <p class="c-card-sub">Left: praised aspects &nbsp;·&nbsp; Right: criticised aspects</p>
       </div>
       <div class="kw-pair">
-        <div class="c-chart-body kw-half"><canvas id="chartKwBPos"></canvas></div>
+        <div class="c-chart-body kw-half"><canvas id="{{ p }}chartKwAPos"></canvas></div>
         <div class="kw-divider"></div>
-        <div class="c-chart-body kw-half"><canvas id="chartKwBNeg"></canvas></div>
+        <div class="c-chart-body kw-half"><canvas id="{{ p }}chartKwANeg"></canvas></div>
       </div>
+    </div>
+    <div class="c-card">
+      <div class="c-card-header kw-header-b">
+        <h3 class="c-card-title" id="{{ p }}kwTitleB">Topic B — Keywords</h3>
+        <p class="c-card-sub">Left: praised aspects &nbsp;·&nbsp; Right: criticised aspects</p>
+      </div>
+      <div class="kw-pair">
+        <div class="c-chart-body kw-half"><canvas id="{{ p }}chartKwBPos"></canvas></div>
+        <div class="kw-divider"></div>
+        <div class="c-chart-body kw-half"><canvas id="{{ p }}chartKwBNeg"></canvas></div>
+      </div>
+    </div>
+    </div>
+  </details>
+
+  <div class="c-section-header">
+    <span class="c-section-title">Sentiment Breakdown</span>
+    <span class="c-section-desc">The sentiment fingerprint of each community — how positive, negative, and neutral sentiment compares between the two topics</span>
+  </div>
+  <div class="c-grid">
+    <div class="c-card">
+      <div class="c-card-header">
+        <h3 class="c-card-title">Sentiment Distribution</h3>
+        <p class="c-card-sub">Average model confidence per sentiment — which topic is more positively or negatively perceived</p>
+      </div>
+      <div class="c-chart-body"><canvas id="{{ p }}chartEmotionBar"></canvas></div>
+    </div>
+    <div class="c-card">
+      <div class="c-card-header">
+        <h3 class="c-card-title">Sentiment Fingerprint</h3>
+        <p class="c-card-sub">Overlaid sentiment profiles — where the shapes diverge is where community perception differs</p>
+      </div>
+      <div class="c-chart-body"><canvas id="{{ p }}chartEmotionRadar"></canvas></div>
     </div>
   </div>
 
-  <!-- ── SECTION 4: COMMUNITY BEHAVIOUR ───────────────────── -->
+  <div class="c-section-header">
+    <span class="c-section-title">Content Analysis</span>
+    <span class="c-section-desc">How people write about each topic — longer comments often signal deeper emotional investment</span>
+  </div>
+  <div class="c-grid">
+    <div class="c-card">
+      <div class="c-card-header">
+        <h3 class="c-card-title">Avg Comment Length by Sentiment</h3>
+        <p class="c-card-sub">Do positive or negative commenters write more? Longer negative comments may indicate frustration</p>
+      </div>
+      <div class="c-chart-body"><canvas id="{{ p }}chartTextLength"></canvas></div>
+    </div>
+    <div class="c-card">
+      <div class="c-card-header">
+        <h3 class="c-card-title">Positive vs Negative Split</h3>
+        <p class="c-card-sub">Overall ratio of positive to negative opinion — higher positive % means the community leans in favour</p>
+      </div>
+      <div class="c-chart-body"><canvas id="{{ p }}chartSplitDonut"></canvas></div>
+    </div>
+  </div>
+
   <div class="c-section-header">
     <span class="c-section-title">Community Behaviour</span>
     <span class="c-section-desc">When and how each community engages — patterns reveal audience demographics and habits</span>
   </div>
-
   <div class="c-grid">
     <div class="c-card">
       <div class="c-card-header">
         <h3 class="c-card-title">Peak Posting Hours (UTC)</h3>
         <p class="c-card-sub">Overlapping peaks = shared audience; diverging peaks = different demographics</p>
       </div>
-      <div class="c-chart-body"><canvas id="chartHours"></canvas></div>
+      <div class="c-chart-body"><canvas id="{{ p }}chartHours"></canvas></div>
     </div>
-
     <div class="c-card">
       <div class="c-card-header">
         <h3 class="c-card-title">Weekly Activity Rhythm</h3>
         <p class="c-card-sub">Are communities more active on weekdays or weekends? Different rhythms suggest different user bases</p>
       </div>
-      <div class="c-chart-body"><canvas id="chartWeekly"></canvas></div>
+      <div class="c-chart-body"><canvas id="{{ p }}chartWeekly"></canvas></div>
     </div>
+    {% if g and g.audience_compare %}
+    <div class="c-ai-insight full">
+      <span class="c-ai-label">AI Insight</span>
+      <p class="c-ai-text">{{ g.audience_compare }}</p>
+    </div>
+    {% endif %}
+  </div>
+{% endmacro %}
+
+<div class="compare-results">
+
+  <!-- ── HERO ─────────────────────────────────────────────── -->
+  <div class="compare-hero" id="compareHero"></div>
+
+  <!-- ── AI OVERVIEW ───────────────────────────────────────── -->
+  {% if gemini_compare and gemini_compare.overview %}
+  <div class="c-gemini-overview">
+    <span class="c-ai-label">AI Overview</span>
+    <p class="c-ai-text">{{ gemini_compare.overview }}</p>
+  </div>
+  {% endif %}
+
+  <!-- ── SOURCE TABS ───────────────────────────────────────── -->
+  <div class="compare-tab-strip">
+    <button class="compare-tab active" onclick="switchCompareTab('all', this)">Overall</button>
+    <button class="compare-tab" onclick="switchCompareTab('reddit', this)">Reddit</button>
+    <button class="compare-tab" onclick="switchCompareTab('youtube', this)">YouTube</button>
+  </div>
+
+  <!-- ── PANELS ────────────────────────────────────────────── -->
+  <div id="panel-all" class="compare-tab-panel">
+    {{ compare_charts('all_', gemini_compare) }}
+  </div>
+
+  <div id="panel-reddit" class="compare-tab-panel" style="display:none">
+    {{ compare_charts('reddit_', gemini_compare) }}
+  </div>
+
+  <div id="panel-youtube" class="compare-tab-panel" style="display:none">
+    {{ compare_charts('youtube_', gemini_compare) }}
   </div>
 
 </div><!-- .compare-results -->
@@ -220,373 +382,5 @@
      CHART.JS + RENDERING
      ============================================================ -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-// ── Custom topic dropdown ───────────────────────────────────
-(function () {
-  const pairs = [
-    { inputId: 'inputA', dropdownId: 'dropdownA', accentColor: '#4facfe' },
-    { inputId: 'inputB', dropdownId: 'dropdownB', accentColor: '#a855f7' },
-  ];
-
-  pairs.forEach(({ inputId, dropdownId, accentColor }) => {
-    const input    = document.getElementById(inputId);
-    const dropdown = document.getElementById(dropdownId);
-    if (!input || !dropdown) return;
-
-    let activeIdx = -1;
-
-    function getFiltered(q) {
-      const lq = q.trim().toLowerCase();
-      if (!lq) return SUGGESTIONS;
-      return SUGGESTIONS.filter(s => s.name.toLowerCase().includes(lq));
-    }
-
-    function renderDropdown(items) {
-      if (!items.length) { dropdown.classList.remove('open'); return; }
-
-      dropdown.innerHTML = items.map((s, i) => {
-        const isFeatured = s.kind === 'featured';
-        const badgeClass = isFeatured ? 'topic-badge-featured' : 'topic-badge-saved';
-        const badgeText  = isFeatured ? '⭐ Featured' : '📁 Your Scan';
-        return `<div class="topic-option" data-idx="${i}" data-name="${s.name}">
-          <span class="topic-option-name">${s.name}</span>
-          <span class="topic-badge ${badgeClass}">${badgeText}</span>
-        </div>`;
-      }).join('');
-
-      dropdown.querySelectorAll('.topic-option').forEach(el => {
-        el.addEventListener('mousedown', e => {
-          e.preventDefault();
-          input.value = el.dataset.name;
-          dropdown.classList.remove('open');
-          activeIdx = -1;
-        });
-      });
-
-      activeIdx = -1;
-      dropdown.classList.add('open');
-    }
-
-    function updateActive() {
-      dropdown.querySelectorAll('.topic-option').forEach((el, i) => {
-        el.classList.toggle('active', i === activeIdx);
-        if (i === activeIdx) el.scrollIntoView({ block: 'nearest' });
-      });
-    }
-
-    input.addEventListener('focus', () => renderDropdown(getFiltered(input.value)));
-    input.addEventListener('input', () => renderDropdown(getFiltered(input.value)));
-
-    input.addEventListener('keydown', e => {
-      const opts = dropdown.querySelectorAll('.topic-option');
-      if (!dropdown.classList.contains('open')) return;
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        activeIdx = Math.min(activeIdx + 1, opts.length - 1);
-        updateActive();
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        activeIdx = Math.max(activeIdx - 1, 0);
-        updateActive();
-      } else if (e.key === 'Enter' && activeIdx >= 0) {
-        e.preventDefault();
-        input.value = opts[activeIdx].dataset.name;
-        dropdown.classList.remove('open');
-        activeIdx = -1;
-      } else if (e.key === 'Escape') {
-        dropdown.classList.remove('open');
-        activeIdx = -1;
-      }
-    });
-
-    input.addEventListener('blur', () => {
-      setTimeout(() => { dropdown.classList.remove('open'); activeIdx = -1; }, 150);
-    });
-  });
-})();
-
-document.addEventListener('DOMContentLoaded', function () {
-
-  // ── Loading indicator on form submit ─────────────────────
-  const form = document.getElementById('compareForm');
-  if (form) {
-    form.addEventListener('submit', function () {
-      const btn    = document.getElementById('compareBtn');
-      const loader = document.getElementById('compareLoader');
-      const bar    = document.getElementById('loaderBar');
-      const pct    = document.getElementById('loaderPct');
-      const txt    = document.getElementById('loaderText');
-      if (btn && loader) {
-        btn.disabled  = true;
-        btn.textContent = 'Comparing…';
-        loader.style.display = 'block';
-        // Animate the bar while waiting (we don't know exact progress for two topics)
-        let p = 0;
-        const iv = setInterval(async () => {
-          try {
-            const res  = await fetch('/api/fetch_progress');
-            const data = await res.json();
-            if (data.status === 'fetching' && data.total > 0) {
-              p = Math.floor((data.current / data.total) * 85);
-              txt.innerHTML = `<span class="c-spinner"></span> ${data.message} (${data.current}/${data.total})`;
-            } else if (data.status === 'analyzing') {
-              p = 90;
-              txt.innerHTML = `<span class="c-spinner"></span> ${data.message}`;
-            } else if (data.status === 'complete') {
-              p = 100;
-              clearInterval(iv);
-            } else {
-              p = Math.min(p + 2, 88);
-            }
-          } catch (_) { p = Math.min(p + 1, 88); }
-          bar.style.width = p + '%';
-          pct.textContent = p + '%';
-        }, 500);
-      }
-    });
-  }
-
-  // ── Chart rendering ───────────────────────────────────────
-  const raw = {{ comparison_json | default('null') | safe }};
-  if (!raw) return;
-
-  Chart.defaults.color = '#94a3b8';
-  Chart.defaults.font.family = "'Inter', -apple-system, sans-serif";
-  Chart.defaults.font.size   = 12;
-  Chart.defaults.plugins.tooltip.backgroundColor  = 'rgba(11,15,25,0.95)';
-  Chart.defaults.plugins.tooltip.titleColor       = '#fff';
-  Chart.defaults.plugins.tooltip.bodyColor        = '#94a3b8';
-  Chart.defaults.plugins.tooltip.padding          = 12;
-  Chart.defaults.plugins.tooltip.borderColor      = 'rgba(0,242,254,0.25)';
-  Chart.defaults.plugins.tooltip.borderWidth      = 1;
-  Chart.defaults.plugins.tooltip.cornerRadius     = 8;
-  Chart.defaults.scale.grid.color = 'rgba(255,255,255,0.04)';
-
-  const nameA = raw.topic_a.name;
-  const nameB = raw.topic_b.name;
-
-  // Color palette: Topic A = cyan/blue, Topic B = purple/amber
-  const CA = {
-    solid: '#4facfe', area: 'rgba(79,172,254,0.15)',
-    pos:   'rgba(79,172,254,0.75)', neg: 'rgba(79,172,254,0.4)',
-  };
-  const CB = {
-    solid: '#a855f7', area: 'rgba(168,85,247,0.15)',
-    pos:   'rgba(168,85,247,0.75)', neg: 'rgba(168,85,247,0.4)',
-  };
-
-  // ── Hero Banner (rendered by JS) ────────────────────────
-  const hero = document.getElementById('compareHero');
-  if (hero) {
-    const ta = raw.topic_a, tb = raw.topic_b;
-    const fmtRating = r => (r > 0 ? '+' : '') + r.toFixed(1);
-    const sentColor = s => s === 'Positive' ? '#10b981' : (s === 'Negative' ? '#ef4444' : '#4facfe');
-    const pctA = ((ta.rating + 100) / 200 * 100).toFixed(1);
-    const pctB = ((tb.rating + 100) / 200 * 100).toFixed(1);
-
-    const TOPIC_IMAGES = {
-      "Donald Trump": "donaldtrump.png", "The Boys": "theboys.png",
-      "Avengers Doomsday": "avengersdoomsday.png", "Macbook Neo": "macbookneo.png",
-      "America vs Iran": "americavsiran.png"
-    };
-    const imgA = TOPIC_IMAGES[nameA] ? `/static/images/${TOPIC_IMAGES[nameA]}` : null;
-    const imgB = TOPIC_IMAGES[nameB] ? `/static/images/${TOPIC_IMAGES[nameB]}` : null;
-    const bgA  = imgA ? `url('${imgA}')` : 'linear-gradient(135deg,rgba(79,172,254,0.3),rgba(0,242,254,0.1))';
-    const bgB  = imgB ? `url('${imgB}')` : 'linear-gradient(135deg,rgba(168,85,247,0.3),rgba(236,72,153,0.1))';
-
-    hero.innerHTML = `
-      <div class="hero-panel hero-a" style="--panel-bg:${bgA}">
-        <div class="hero-panel-overlay"></div>
-        <div class="hero-panel-content">
-          <span class="hero-topic-label">Topic A</span>
-          <h2 class="hero-topic-name">${nameA}</h2>
-          <div class="hero-rating" style="color:${sentColor(ta.sentiment)}">${fmtRating(ta.rating)}</div>
-          <span class="hero-sentiment-pill" style="background:${sentColor(ta.sentiment)}22; color:${sentColor(ta.sentiment)}; border-color:${sentColor(ta.sentiment)}66">${ta.sentiment.toUpperCase()}</span>
-          <p class="hero-comments">${ta.total_comments.toLocaleString()} comments</p>
-          <div class="hero-bar-track">
-            <div class="hero-bar-center"></div>
-            ${ta.rating >= 0
-              ? `<div class="hero-bar-fill" style="left:50%;width:${(pctA-50).toFixed(1)}%;background:linear-gradient(90deg,rgba(16,185,129,0.5),rgba(16,185,129,1));"></div>`
-              : `<div class="hero-bar-fill" style="left:${pctA}%;width:${(50-pctA).toFixed(1)}%;background:linear-gradient(90deg,rgba(239,68,68,1),rgba(239,68,68,0.5));"></div>`}
-          </div>
-          <div class="hero-bar-axis"><span>-100</span><span>0</span><span>+100</span></div>
-        </div>
-      </div>
-
-      <div class="hero-vs">VS</div>
-
-      <div class="hero-panel hero-b" style="--panel-bg:${bgB}">
-        <div class="hero-panel-overlay"></div>
-        <div class="hero-panel-content">
-          <span class="hero-topic-label" style="color:#a855f7">Topic B</span>
-          <h2 class="hero-topic-name">${nameB}</h2>
-          <div class="hero-rating" style="color:${sentColor(tb.sentiment)}">${fmtRating(tb.rating)}</div>
-          <span class="hero-sentiment-pill" style="background:${sentColor(tb.sentiment)}22; color:${sentColor(tb.sentiment)}; border-color:${sentColor(tb.sentiment)}66">${tb.sentiment.toUpperCase()}</span>
-          <p class="hero-comments">${tb.total_comments.toLocaleString()} comments</p>
-          <div class="hero-bar-track">
-            <div class="hero-bar-center"></div>
-            ${tb.rating >= 0
-              ? `<div class="hero-bar-fill" style="left:50%;width:${(pctB-50).toFixed(1)}%;background:linear-gradient(90deg,rgba(16,185,129,0.5),rgba(16,185,129,1));"></div>`
-              : `<div class="hero-bar-fill" style="left:${pctB}%;width:${(50-pctB).toFixed(1)}%;background:linear-gradient(90deg,rgba(239,68,68,1),rgba(239,68,68,0.5));"></div>`}
-          </div>
-          <div class="hero-bar-axis"><span>-100</span><span>0</span><span>+100</span></div>
-        </div>
-      </div>
-    `;
-  }
-
-  const sharedOpts = { responsive: true, maintainAspectRatio: false };
-  const grouped = {
-    ...sharedOpts,
-    interaction: { mode: 'index', intersect: false },
-    plugins: { legend: { position: 'top' } },
-    scales: { y: { beginAtZero: true } },
-  };
-
-  // ── Chart: Sentiment Split ───────────────────────────────
-  new Chart(document.getElementById('chartSplit'), {
-    type: 'bar',
-    data: {
-      labels: raw.chart_split.labels,
-      datasets: [
-        { label: nameA, data: raw.chart_split.topic_a,
-          backgroundColor: CA.pos, borderColor: CA.solid, borderWidth: 1, borderRadius: 6 },
-        { label: nameB, data: raw.chart_split.topic_b,
-          backgroundColor: CB.pos, borderColor: CB.solid, borderWidth: 1, borderRadius: 6 },
-      ]
-    },
-    options: {
-      ...grouped,
-      scales: { y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } } },
-    }
-  });
-
-  // ── Chart: Avg Upvotes ───────────────────────────────────
-  new Chart(document.getElementById('chartUpvotes'), {
-    type: 'bar',
-    data: {
-      labels: raw.chart_upvotes.labels,
-      datasets: [
-        { label: nameA, data: raw.chart_upvotes.topic_a,
-          backgroundColor: CA.pos, borderColor: CA.solid, borderWidth: 1, borderRadius: 6 },
-        { label: nameB, data: raw.chart_upvotes.topic_b,
-          backgroundColor: CB.pos, borderColor: CB.solid, borderWidth: 1, borderRadius: 6 },
-      ]
-    },
-    options: grouped,
-  });
-
-  // ── Chart: Daily Positive % Timeline ────────────────────
-  new Chart(document.getElementById('chartTimeline'), {
-    type: 'line',
-    data: {
-      labels: raw.chart_timeline.labels,
-      datasets: [
-        { label: nameA + ' — % Positive', data: raw.chart_timeline.topic_a,
-          borderColor: CA.solid, backgroundColor: CA.area,
-          tension: 0.4, fill: true, borderWidth: 2, pointRadius: 0, spanGaps: true },
-        { label: nameB + ' — % Positive', data: raw.chart_timeline.topic_b,
-          borderColor: CB.solid, backgroundColor: CB.area,
-          tension: 0.4, fill: true, borderWidth: 2, pointRadius: 0, spanGaps: true },
-      ]
-    },
-    options: {
-      ...sharedOpts,
-      interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { position: 'top' } },
-      scales: {
-        y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } }
-      }
-    }
-  });
-
-  // ── Chart: Volatility ────────────────────────────────────
-  new Chart(document.getElementById('chartVolatility'), {
-    type: 'line',
-    data: {
-      labels: raw.chart_volatility.labels,
-      datasets: [
-        { label: nameA, data: raw.chart_volatility.topic_a,
-          borderColor: CA.solid, backgroundColor: CA.area,
-          tension: 0.4, fill: false, borderWidth: 2, pointRadius: 0, spanGaps: true },
-        { label: nameB, data: raw.chart_volatility.topic_b,
-          borderColor: CB.solid, backgroundColor: CB.area,
-          tension: 0.4, fill: false, borderWidth: 2, pointRadius: 0, spanGaps: true },
-      ]
-    },
-    options: {
-      ...sharedOpts,
-      interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { position: 'top' } },
-      scales: { y: { beginAtZero: true } },
-    }
-  });
-
-  // ── Keywords (4 mini charts in 2 cards) ─────────────────
-  const kwCardTitle = (id, name, color) => {
-    const el = document.getElementById(id);
-    if (el) { el.textContent = name + ' — Keywords'; el.style.color = color; }
-  };
-  kwCardTitle('kwTitleA', nameA, CA.solid);
-  kwCardTitle('kwTitleB', nameB, CB.solid);
-
-  function renderKwChart(canvasId, labels, values, color) {
-    const el = document.getElementById(canvasId);
-    if (!el || !labels.length) return;
-    new Chart(el, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{ label: 'Mentions', data: values,
-          backgroundColor: color + 'aa', borderColor: color, borderWidth: 1, borderRadius: 3 }]
-      },
-      options: {
-        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { x: { beginAtZero: true, ticks: { maxTicksLimit: 4 } } }
-      }
-    });
-  }
-
-  if (raw.keywords_a) {
-    renderKwChart('chartKwAPos', raw.keywords_a.positive.labels, raw.keywords_a.positive.values, CA.solid);
-    renderKwChart('chartKwANeg', raw.keywords_a.negative.labels, raw.keywords_a.negative.values, '#ef4444');
-  }
-  if (raw.keywords_b) {
-    renderKwChart('chartKwBPos', raw.keywords_b.positive.labels, raw.keywords_b.positive.values, CB.solid);
-    renderKwChart('chartKwBNeg', raw.keywords_b.negative.labels, raw.keywords_b.negative.values, '#ef4444');
-  }
-
-  // ── Chart: Peak Hours ────────────────────────────────────
-  new Chart(document.getElementById('chartHours'), {
-    type: 'bar',
-    data: {
-      labels: raw.chart_hours.labels,
-      datasets: [
-        { label: nameA, data: raw.chart_hours.topic_a,
-          backgroundColor: CA.neg, borderColor: CA.solid, borderWidth: 1, borderRadius: 3 },
-        { label: nameB, data: raw.chart_hours.topic_b,
-          backgroundColor: CB.neg, borderColor: CB.solid, borderWidth: 1, borderRadius: 3 },
-      ]
-    },
-    options: { ...grouped, scales: { y: { beginAtZero: true } } },
-  });
-
-  // ── Chart: Weekly Rhythm ─────────────────────────────────
-  new Chart(document.getElementById('chartWeekly'), {
-    type: 'bar',
-    data: {
-      labels: raw.chart_weekly.labels,
-      datasets: [
-        { label: nameA, data: raw.chart_weekly.topic_a,
-          backgroundColor: CA.pos, borderColor: CA.solid, borderWidth: 1, borderRadius: 4 },
-        { label: nameB, data: raw.chart_weekly.topic_b,
-          backgroundColor: CB.pos, borderColor: CB.solid, borderWidth: 1, borderRadius: 4 },
-      ]
-    },
-    options: { ...grouped, scales: { y: { beginAtZero: true } } },
-  });
-
-});
-</script>
+<script src="{{ url_for('static', filename='js/compare.js') }}"></script>
 {% endblock %}

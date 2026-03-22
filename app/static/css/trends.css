@@ -419,10 +419,11 @@
 }
 
 /* Span classes */
-.chart-card         { grid-column: span 2; }  /* 3 per row */
-.chart-card.full    { grid-column: span 6; }  /* full width */
-.chart-card.half    { grid-column: span 3; }  /* 2 per row */
-.chart-card.two-thirds { grid-column: span 4; } /* 2/3 width */
+.chart-card           { grid-column: span 2; }  /* 3 per row */
+.chart-card.full      { grid-column: span 6; }  /* full width */
+.chart-card.half      { grid-column: span 3; }  /* 2 per row */
+.chart-card.two-thirds{ grid-column: span 4; }  /* 2/3 width */
+.chart-card.third     { grid-column: span 2; }  /* 3 per row (explicit alias) */
 
 .section-header  { grid-column: span 6; }
 .reddit-voices   { grid-column: span 6; }
@@ -549,9 +550,9 @@
 }
 
 .chart-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 16px 40px rgba(0,0,0,0.3), 0 0 0 1px rgba(0,242,254,0.08);
-  border-color: rgba(0, 242, 254, 0.15);
+  transform: translateY(-3px);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(255, 75, 31, 0.10);
+  border-color: rgba(255, 75, 31, 0.18);
 }
 
 .chart-header {
@@ -582,6 +583,111 @@
 }
 
 .chart-body.tall { min-height: 360px; }
+
+/* ── Reddit-style keyword cards ── */
+.kw-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0 8px;
+}
+.rc-card {
+  display: flex;
+  gap: 0;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-left: 3px solid var(--rc-border, #444);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.2s, background 0.2s;
+}
+.rc-card:hover {
+  background: rgba(255,255,255,0.05);
+  border-left-color: var(--rc-accent, #888);
+}
+/* vote column */
+.rc-vote {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 3px;
+  padding: 12px 10px 12px 12px;
+  background: rgba(0,0,0,0.2);
+  min-width: 44px;
+}
+.rc-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--rc-accent, #888);
+  flex-shrink: 0;
+}
+.rc-score {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--rc-accent, #888);
+  line-height: 1;
+}
+/* main content */
+.rc-content {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 14px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.rc-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.rc-sub {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--rc-accent, #888);
+  text-decoration: none;
+  letter-spacing: 0.3px;
+}
+.rc-author {
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.35);
+}
+.rc-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.75);
+  line-height: 1.4;
+}
+.rc-body {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.55);
+  line-height: 1.5;
+  font-style: italic;
+}
+.rc-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
+.rc-tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+.rc-mention {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.35);
+}
 
 
 /* ============================================================
@@ -855,6 +961,7 @@
   .chart-card.full          { grid-column: span 4; }
   .chart-card.half          { grid-column: span 2; }
   .chart-card.two-thirds    { grid-column: span 4; }
+  .chart-card.third         { grid-column: span 2; }
   .section-header,
   .reddit-voices,
   .takeaways-panel          { grid-column: span 4; }
@@ -878,4 +985,1267 @@
   .reddit-voices             { grid-template-columns: 1fr; }
   .analysis-hero-inner       { flex-direction: column; }
   .hero-grid                 { grid-template-columns: repeat(2, 1fr); }
+  .yt-video-cards-grid       { grid-template-columns: 1fr 1fr; }
+  .source-split-row          { flex-direction: column; gap: 8px; }
+  .source-split-bar          { display: none; }
+}
+
+@media (max-width: 500px) {
+  .yt-video-cards-grid       { grid-template-columns: 1fr; }
+}
+
+
+/* ============================================================
+   TAB BAR
+   ============================================================ */
+.tab-bar-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(11, 15, 25, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  padding: 0 5%;
+}
+
+.tab-bar {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  gap: 4px;
+  padding: 10px 0;
+}
+
+.tab-btn {
+  padding: 8px 20px;
+  border-radius: 30px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  letter-spacing: 0.01em;
+}
+
+.tab-btn:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.06);
+}
+
+.tab-btn.active {
+  background: rgba(94, 184, 208, 0.1);
+  border-color: rgba(94, 184, 208, 0.35);
+  color: var(--accent-cyan);
+}
+
+.tab-btn svg { flex-shrink: 0; }
+
+.tab-panel { display: block; }
+
+
+/* ============================================================
+   SOURCE SPLIT ROW (overview tab)
+   ============================================================ */
+.source-split-row {
+  grid-column: span 6;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: var(--bg-card);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+}
+
+.source-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.source-pill-label {
+  display: block;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #e2e8f0;
+}
+
+.source-pill-count {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.source-split-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.05);
+  display: flex;
+}
+
+.split-reddit-fill {
+  height: 100%;
+  background: #ff4500;
+  transition: width 0.6s ease;
+}
+
+.split-yt-fill {
+  height: 100%;
+  background: #ff0000;
+  transition: width 0.6s ease;
+}
+
+
+/* ============================================================
+   PLATFORM BADGES
+   ============================================================ */
+.platform-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+  margin-right: 4px;
+}
+
+.platform-badge.reddit-badge {
+  background: rgba(255, 69, 0, 0.12);
+  color: #ff6333;
+  border: 1px solid rgba(255, 69, 0, 0.25);
+}
+
+.platform-badge.yt-badge {
+  background: rgba(255, 0, 0, 0.12);
+  color: #ff4444;
+  border: 1px solid rgba(255, 0, 0, 0.25);
+}
+
+
+/* ============================================================
+   YOUTUBE VIDEO CARDS
+   ============================================================ */
+.yt-video-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 18px;
+}
+
+.yt-video-card {
+  background: var(--bg-card);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+  overflow: hidden;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.yt-video-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(255, 0, 0, 0.3);
+}
+
+.yt-thumb-link {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+}
+
+.yt-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.yt-play-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  color: transparent;
+  transition: all 0.2s ease;
+}
+
+.yt-thumb-link:hover .yt-play-overlay {
+  background: rgba(0,0,0,0.38);
+  color: rgba(255,255,255,0.9);
+}
+
+.yt-card-body { padding: 13px 15px 14px; }
+
+.yt-card-title {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin: 0 0 9px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.yt-card-stats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 9px;
+}
+
+.yt-stat { font-size: 0.74rem; color: var(--text-muted); }
+
+.yt-emotion-pill {
+  font-size: 0.67rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 20px;
+  text-transform: capitalize;
+}
+
+.emotion-joy      { background: rgba(16,185,129,0.12); color: #10b981; border: 1px solid rgba(16,185,129,0.25); }
+.emotion-optimism { background: rgba(245,158,11,0.12); color: #f59e0b; border: 1px solid rgba(245,158,11,0.25); }
+.emotion-anger    { background: rgba(239,68,68,0.12);  color: #ef4444; border: 1px solid rgba(239,68,68,0.25);  }
+.emotion-sadness  { background: rgba(59,130,246,0.12); color: #3b82f6; border: 1px solid rgba(59,130,246,0.25); }
+.emotion-neutral  { background: rgba(100,116,139,0.12);color: #94a3b8; border: 1px solid rgba(100,116,139,0.25);}
+.emotion-positive { background: rgba(16,185,129,0.12); color: #10b981; border: 1px solid rgba(16,185,129,0.25); }
+.emotion-negative { background: rgba(239,68,68,0.12);  color: #ef4444; border: 1px solid rgba(239,68,68,0.25);  }
+
+.yt-sentiment-bar {
+  height: 4px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 5px;
+}
+
+.yt-pos-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981, #34d399);
+  border-radius: 4px;
+  transition: width 0.6s ease;
+}
+
+.yt-pos-label { font-size: 0.72rem; color: var(--text-muted); margin: 0; }
+
+
+/* ============================================================
+   YOUTUBE-STYLE COMMENT CARDS
+   ============================================================ */
+.yt-comment-card {
+  display: flex;
+  gap: 14px;
+  padding: 16px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.yt-comment-card:last-child { border-bottom: none; }
+
+.yt-avatar {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4facfe, #a855f7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
+  text-transform: uppercase;
+}
+
+.yt-comment-body { flex: 1; min-width: 0; }
+
+.yt-comment-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.yt-comment-author {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.yt-comment-time {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.yt-comment-text {
+  font-size: 0.875rem;
+  color: #cbd5e1;
+  line-height: 1.6;
+  word-break: break-word;
+  margin: 0 0 10px;
+}
+
+.yt-comment-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.yt-like-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.yt-like-btn svg { opacity: 0.7; }
+
+.yt-comment-sentiment-pill {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.yt-voices-wrap {
+  grid-column: span 6;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.yt-voice-col {}
+
+.yt-voice-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 12px;
+}
+
+.yt-voice-label.pos { color: var(--accent-green); }
+.yt-voice-label.neg { color: var(--accent-red); }
+
+
+/* ============================================================
+   YOUTUBE HORIZONTAL VIDEO CARDS
+   ============================================================ */
+.yt-video-cards-list {
+  grid-column: span 6;   /* always full width inside .trends-container */
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.yt-video-card-h {
+  display: flex;
+  gap: 0;
+  background: var(--bg-card);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+  overflow: hidden;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+  align-items: flex-start;
+}
+
+.yt-video-card-h:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 0, 0, 0.3);
+}
+
+.yt-thumb-link-h {
+  position: relative;
+  display: block;
+  flex-shrink: 0;
+  width: 160px;
+  height: 90px;   /* fixed 16:9 */
+  overflow: hidden;
+}
+
+.yt-thumb-h {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.yt-play-overlay-h {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  color: transparent;
+  transition: all 0.2s ease;
+}
+
+.yt-thumb-link-h:hover .yt-play-overlay-h {
+  background: rgba(0,0,0,0.4);
+  color: rgba(255,255,255,0.92);
+}
+
+.yt-card-body-h {
+  flex: 1;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.yt-card-title-h {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin: 0;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.yt-card-meta-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 1200px) {
+  .yt-video-cards-list { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 768px) {
+  .yt-video-cards-list  { grid-template-columns: 1fr; }
+  .yt-thumb-link-h      { width: 130px; }
+  .chart-card.third     { grid-column: span 4; }
+}
+
+@media (max-width: 500px) {
+  .chart-card.third { grid-column: span 1; }
+}
+
+/* ============================================================
+   PER-VIDEO SENTIMENT ROW CARDS
+   ============================================================ */
+.yt-sent-rows {
+  grid-column: span 6;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.yt-sent-row {
+  background: var(--bg-card);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 12px;
+  padding: 14px 18px;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.yt-sent-row:hover {
+  border-color: rgba(255,255,255,0.15);
+  transform: translateX(3px);
+}
+
+.yt-sent-row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.yt-sent-title {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.yt-sent-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.yt-sent-count {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.yt-sent-pill {
+  font-size: 0.67rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 20px;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.yt-sent-pill-positive { background: rgba(16,185,129,0.12); color: #10b981; border: 1px solid rgba(16,185,129,0.3); }
+.yt-sent-pill-negative { background: rgba(239,68,68,0.12);  color: #ef4444; border: 1px solid rgba(239,68,68,0.3);  }
+.yt-sent-pill-neutral  { background: rgba(100,116,139,0.12);color: #94a3b8; border: 1px solid rgba(100,116,139,0.3); }
+
+.yt-sent-bar-track {
+  height: 8px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.05);
+  display: flex;
+  margin-bottom: 8px;
+}
+
+.yt-sent-seg { height: 100%; transition: width 0.5s ease; }
+
+.yt-sent-pcts {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.yt-sent-pct        { font-size: 0.72rem; color: var(--text-muted); }
+.yt-sent-pct.pos-pct { color: #10b981; }
+.yt-sent-pct.neg-pct { color: #ef4444; }
+.yt-sent-pct.neu-pct { color: #94a3b8; }
+
+/* ── Debate keyword tags ───────────────────────────────── */
+.debate-kw-row {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.debate-kw-tag {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px;
+  padding: 2px 8px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+/* ── YouTube thumbnail inside sentiment row ────────────── */
+.yt-sent-row-media {
+  flex-direction: row;
+  padding: 0;
+  overflow: hidden;
+  align-items: stretch;
+  display: flex;
+}
+
+.yt-sent-row-media.has-thumb .yt-sent-thumb-link {
+  position: relative;
+  flex-shrink: 0;
+  width: 140px;
+  overflow: hidden;
+}
+
+.yt-sent-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.yt-sent-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0);
+  color: transparent;
+  font-size: 1.6rem;
+  transition: all 0.2s ease;
+}
+
+.yt-sent-thumb-link:hover .yt-sent-play {
+  background: rgba(0,0,0,0.45);
+  color: rgba(255,255,255,0.9);
+}
+
+.yt-sent-row-body {
+  flex: 1;
+  min-width: 0;
+  padding: 14px 18px;
+}
+
+/* ── Top 10 Post Cards ─────────────────────────────────── */
+.top10-post-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.top10-post-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.top10-post-card:hover {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.12);
+}
+
+.top10-rank {
+  font-size: 1rem;
+  font-weight: 800;
+  min-width: 32px;
+  text-align: center;
+  opacity: 0.8;
+}
+
+.top10-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.top10-title {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin: 0 0 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.top10-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.top10-pill {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+  text-transform: capitalize;
+}
+
+.top10-score {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+  gap: 2px;
+}
+
+.top10-score-num {
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.top10-score-lbl {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+
+/* ============================================================
+   PLATFORM TOGGLE (replaces tab-bar)
+   ============================================================ */
+.platform-toggle-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(11, 15, 25, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  padding: 0 5%;
+}
+
+.platform-toggle {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  gap: 4px;
+  padding: 10px 0;
+}
+
+.ptoggle-btn {
+  padding: 8px 20px;
+  border-radius: 30px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  letter-spacing: 0.01em;
+}
+
+.ptoggle-btn:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.06);
+}
+
+.ptoggle-btn.active {
+  background: rgba(94, 184, 208, 0.1);
+  border-color: rgba(94, 184, 208, 0.35);
+  color: var(--accent-cyan);
+}
+
+.ptoggle-btn svg { flex-shrink: 0; }
+
+
+/* ============================================================
+   NARRATIVE SECTIONS
+   ============================================================ */
+.narrative-section {
+  display: contents; /* children become direct grid items of .trends-container */
+}
+
+.narrative-section-label {
+  grid-column: span 6;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--accent-cyan);
+  margin-bottom: 24px;
+  padding: 12px 0 12px 18px;
+  border-left: 3px solid rgba(94,184,208,0.6);
+  border-bottom: 1px solid rgba(94,184,208,0.12);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(90deg, rgba(94,184,208,0.04), transparent 60%);
+}
+
+.section-question {
+  grid-column: span 6;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #f1f5f9;
+  margin: 36px 0 14px;
+  letter-spacing: -0.02em;
+  position: relative;
+  padding-left: 0;
+}
+
+/* Subtle terracotta dot accent before each question */
+.section-question::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  margin-right: 12px;
+  vertical-align: middle;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.section-question.full { grid-column: span 6; }
+
+/* ============================================================
+   GEMINI AI CONTEXT BLURBS (debate summary, viral posts)
+   ============================================================ */
+.gemini-debate-summary,
+.gemini-viral-posts {
+  grid-column: span 6;
+  background: linear-gradient(135deg, rgba(94,184,208,0.05), rgba(168,85,247,0.04));
+  border: 1px solid rgba(94,184,208,0.14);
+  border-left: 3px solid rgba(94,184,208,0.45);
+  border-radius: 10px;
+  padding: 14px 18px 14px 20px;
+  font-size: 0.87rem;
+  color: #94a3b8;
+  line-height: 1.7;
+  margin-bottom: 4px;
+}
+
+.gemini-debate-summary::before,
+.gemini-viral-posts::before {
+  content: 'AI Context';
+  display: block;
+  font-size: 0.6rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent-cyan);
+  margin-bottom: 7px;
+  opacity: 0.85;
+}
+
+/* ============================================================
+   TAB LOADING INDICATOR
+   ============================================================ */
+.ptoggle-btn.tab-loading::after {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  margin-left: 7px;
+  vertical-align: middle;
+  opacity: 0.7;
+}
+
+/* ============================================================
+   PANEL LOADING OVERLAY (inside reddit / youtube panels)
+   ============================================================ */
+.panel-loading-overlay {
+  grid-column: span 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 20px;
+  gap: 14px;
+}
+
+.plo-bar-wrap {
+  width: 280px;
+  height: 3px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.plo-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent-cyan), #818cf8);
+  border-radius: 999px;
+  transition: width 1.2s ease-out;
+}
+
+.plo-text {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 0;
+  font-family: 'Syne', sans-serif;
+  letter-spacing: 0.03em;
+}
+
+
+/* ============================================================
+   GEMINI SUMMARY CARD
+   ============================================================ */
+.gemini-summary-card {
+  grid-column: span 6;
+  background: linear-gradient(135deg, rgba(94,184,208,0.06), rgba(168,85,247,0.06));
+  border: 1px solid rgba(94,184,208,0.2);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-top: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.gemini-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent-cyan);
+  background: rgba(94,184,208,0.12);
+  border: 1px solid rgba(94,184,208,0.25);
+  border-radius: 6px;
+  padding: 3px 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.gemini-summary-text {
+  font-size: 0.9rem;
+  color: #cbd5e1;
+  line-height: 1.65;
+  margin: 0;
+}
+
+
+/* ============================================================
+   DEEP DIVE COLLAPSIBLE
+   ============================================================ */
+.deep-dive-section {
+  grid-column: span 6;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  overflow: hidden;
+  margin-top: 32px;
+  margin-bottom: 40px;
+}
+
+.deep-dive-toggle {
+  width: 100%;
+  background: rgba(255,255,255,0.03);
+  border: none;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s ease;
+  color: #e2e8f0;
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: inherit;
+}
+
+.deep-dive-toggle:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+.dd-icon {
+  font-size: 0.75rem;
+  color: var(--accent-cyan);
+  transition: transform 0.2s ease;
+}
+
+.dd-sub {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+
+.deep-dive-body {
+  padding: 24px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.deep-dive-card {
+  position: relative;
+}
+
+.chart-question {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  margin-bottom: 4px;
+}
+
+.chart-gemini-desc {
+  font-size: 0.8rem;
+  color: #64748b;
+  line-height: 1.6;
+  margin: 0 0 14px;
+}
+
+/* ============================================================
+   COMPARE PLATFORMS PANEL
+   ============================================================ */
+.cmp-platform-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cmp-platform-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  font-size: 1rem;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.cmp-platform-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+.cmp-platform-badge.reddit { background: rgba(255,69,0,0.18); color: #ff6333; border: 1px solid rgba(255,69,0,0.3); }
+.cmp-platform-badge.youtube { background: rgba(255,0,0,0.15); color: #ff4444; border: 1px solid rgba(255,0,0,0.25); }
+
+.cmp-stats-row {
+  display: flex;
+  gap: 12px;
+}
+
+.cmp-stat {
+  flex: 1;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 12px;
+  text-align: center;
+}
+
+.cmp-stat-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.cmp-stat-value {
+  font-size: 1.4rem;
+  font-weight: 800;
+  line-height: 1;
+}
+.cmp-stat-value.pos { color: #10b981; }
+.cmp-stat-value.neg { color: #ef4444; }
+.cmp-stat-value.neu { color: #6b7280; }
+
+.cmp-gemini-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: linear-gradient(135deg, rgba(94,184,208,0.05), rgba(168,85,247,0.05));
+  border: 1px solid rgba(94,184,208,0.15);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.cmp-gemini-text {
+  font-size: 0.82rem;
+  color: #94a3b8;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.cmp-donut-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 180px;
+}
+
+.cmp-divider-label {
+  grid-column: span 6;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin: 16px 0 4px;
+}
+.cmp-divider-label::before,
+.cmp-divider-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255,255,255,0.07);
+}
+
+/* Compare toggle button — distinct look */
+.ptoggle-btn.compare-btn {
+  background: linear-gradient(135deg, rgba(94,184,208,0.12), rgba(168,85,247,0.12));
+  border: 1px solid rgba(94,184,208,0.25) !important;
+  margin-left: 6px;
+}
+.ptoggle-btn.compare-btn:hover {
+  background: linear-gradient(135deg, rgba(94,184,208,0.2), rgba(168,85,247,0.2));
+}
+.ptoggle-btn.compare-btn.active {
+  background: linear-gradient(135deg, rgba(94,184,208,0.3), rgba(168,85,247,0.3));
+  border-color: rgba(94,184,208,0.5) !important;
+}
+
+/* ============================================================
+   KEYWORD AI OVERVIEW — inline inside each keyword card
+   ============================================================ */
+.kw-ai-overview {
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kw-ai-overview.pos {
+  background: rgba(16,185,129,0.07);
+  border-left: 3px solid rgba(16,185,129,0.45);
+}
+
+.kw-ai-overview.neg {
+  background: rgba(239,68,68,0.07);
+  border-left: 3px solid rgba(239,68,68,0.45);
+}
+
+.kw-ai-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.kw-ai-label.pos { color: #10b981; }
+.kw-ai-label.neg { color: #ef4444; }
+
+.kw-ai-text {
+  font-size: 0.83rem;
+  color: #94a3b8;
+  line-height: 1.65;
+  margin: 0;
+}
+
+/* ============================================================
+   DEEP DIVE LOADING STATE
+   ============================================================ */
+.dd-loading {
+  text-align: center;
+  padding: 40px 20px 30px;
+}
+
+.dd-loading-bar-wrap {
+  width: 60%;
+  max-width: 400px;
+  margin: 0 auto 12px;
+  height: 4px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.dd-loading-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent-cyan), #818cf8);
+  border-radius: 999px;
+}
+
+.dd-loading-text {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+/* ══════════════════════════════════════════════════════════
+   EXPORT / PDF BUTTON
+   ══════════════════════════════════════════════════════════ */
+.export-actions {
+  margin-top: 1.2rem;
+  display: flex;
+  gap: 0.75rem;
+}
+
+.export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.48rem 1.1rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.05);
+  color: var(--text-muted, #94a3b8);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  letter-spacing: 0.02em;
+}
+
+.export-btn:hover {
+  background: rgba(255,255,255,0.11);
+  border-color: rgba(255,255,255,0.22);
+  color: #e2e8f0;
+}
+
+/* ══════════════════════════════════════════════════════════
+   PRINT / PDF EXPORT  (@media print)
+   ══════════════════════════════════════════════════════════ */
+@media print {
+  /* Hide the search / header section and all interactive chrome */
+  .trends-header,
+  .platform-toggle-wrap,
+  .export-actions,
+  .deep-dive-toggle-btn,
+  .back-link,
+  footer { display: none !important; }
+
+  /* Force all tab panels visible so every chart prints */
+  .tab-panel,
+  .tab-content { display: block !important; }
+
+  /* Single column */
+  .trends-container { grid-template-columns: 1fr !important; gap: 1rem !important; }
+
+  /* Avoid page breaks inside cards */
+  .chart-card,
+  .narrative-section,
+  .takeaways-panel,
+  .gemini-summary-card,
+  .reddit-voices { break-inside: avoid; page-break-inside: avoid; }
+
+  /* Expand collapsed deep-dive */
+  .deep-dive-body { display: block !important; }
+
+  /* Light background */
+  body { background: #fff !important; color: #111 !important; }
+  .chart-card,
+  .narrative-section,
+  .takeaways-panel,
+  .gemini-summary-card {
+    background: #f8f9fa !important;
+    color: #111 !important;
+    border: 1px solid #ddd !important;
+  }
+
+  /* Print-converted chart images */
+  img.print-canvas-img { display: block !important; max-width: 100%; }
+
+  .analysis-hero { break-after: avoid; }
+
+  @page { margin: 1.5cm; size: A4; }
 }

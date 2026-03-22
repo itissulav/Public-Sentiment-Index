@@ -10,3 +10,4 @@ app/static/analysed/
 
 # Dev-only files: tests, debug logs, planning docs, seed scripts
 _dev/
+_dev/credentials/

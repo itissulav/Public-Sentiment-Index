@@ -6,41 +6,46 @@ def registerUser(user):
     email = user.get_email()
     username = user.get_username()
     password = user.get_password()
-    
+
     try:
         # 1. Sign up the user in Supabase Auth
         auth_response = public_supabase.auth.sign_up({
             "email" : email,
-            "password": password 
+            "password": password
         })
 
         if auth_response.user is None:
             return {"success": False, "error": "Could not create user account. Please try again."}
-            
+
         user_id = auth_response.user.id
-        
-        # 2. Insert the user details into our custom Users table
+
+        # 2. Insert the user details into our custom users table
         try:
             db_response = (
                 admin_supabase.table("Users")
-                .insert({"UID": user_id, "First Name": firstName, "Last Name": lastName, "Email": email, "Username": username, "Role": "User"})
+                .insert({
+                    "UID": user_id,
+                    "First Name": firstName,
+                    "Last Name": lastName,
+                    "Email": email,
+                    "Username": username,
+                    "Role": "User"
+                })
                 .execute()
             )
             return {"success": True, "data": db_response, "error": None}
-            
+
         except Exception as e:
-            # If database insertion fails, we log the actual error for the developer and return a friendly error for the user
             print(f"Database Insert Error: {e}")
             return {"success": False, "error": "Your account was created, but we failed to save your profile details. Please contact support."}
-            
+
     except Exception as e:
-        # General Auth Error Handling (e.g. Email already exists, weak password, etc)
         error_msg = str(e)
         if "User already registered" in error_msg:
             return {"success": False, "error": "An account with this email already exists."}
         elif "Password should be at least" in error_msg:
             return {"success": False, "error": "Your password is too weak. Please use a stronger password."}
-        
+
         print(f"Supabase Auth Error: {e}")
         return {"success": False, "error": "Registration failed due to a server error. Please try again later."}
 
@@ -53,17 +58,17 @@ def loginUser(user):
             "email": email,
             "password": password
         })
-        
+
         if response.user is None:
             return {"success": False, "error": "Invalid email or password."}
-            
+
         user_id = response.user.id
         auth_email = response.user.email
-        
+
         try:
             # Get user's extra profile info
             db_user = admin_supabase.table("Users").select("*").eq("UID", user_id).execute()
-            
+
             if db_user.data and len(db_user.data) > 0:
                 user_data = db_user.data[0]
                 user.set_user_id(user_data.get("UID"))
@@ -74,7 +79,6 @@ def loginUser(user):
             else:
                 # Account exists in Supabase Auth but has no profile row —
                 # this happens when the account was created via the Supabase dashboard.
-                # Auto-create a profile row so the user can log in.
                 print(f"No profile row found for UID {user_id}, auto-creating one...")
                 username = auth_email.split("@")[0]
                 insert_resp = admin_supabase.table("Users").insert({
@@ -83,9 +87,9 @@ def loginUser(user):
                     "Last Name": "",
                     "Email": auth_email,
                     "Username": username,
-                    "Role": "Admin"  # Accounts without a profile row are dashboard-created admins
+                    "Role": "Admin"
                 }).execute()
-                
+
                 if insert_resp.data:
                     user_data = insert_resp.data[0]
                     user.set_user_id(user_data.get("UID"))
@@ -96,18 +100,18 @@ def loginUser(user):
                     print(f"Auto-created profile row for {auth_email} with Role=Admin")
                 else:
                     return {"success": False, "error": "Could not find or create your user profile."}
-                
+
         except Exception as e:
             print(f"Profile Fetch/Insert Error: {e}")
             return {"success": False, "error": "Logged in, but failed to load profile data."}
-            
+
         return {"success": True, "data": response, "error": None}
-    
+
     except Exception as e:
         error_msg = str(e).lower()
         if "invalid login credentials" in error_msg:
             return {"success": False, "error": "Invalid email or password."}
-            
+
         print(f"Login error: {e}")
         return {"success": False, "error": "An unexpected error occurred during login. Please try again."}
 

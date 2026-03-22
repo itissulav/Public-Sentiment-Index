@@ -7,31 +7,31 @@
   --sidebar-w:        60px;
   --sidebar-expanded: 220px;
 
-  /* Surfaces */
-  --bg:               #090909;
-  --surface:          #111114;
-  --surface-2:        #18181c;
-  --surface-3:        #202026;
+  /* Surfaces — deep editorial black */
+  --bg:               #060607;
+  --surface:          #0F0E12;
+  --surface-2:        #161422;
+  --surface-3:        #1E1C28;
 
   /* Borders */
-  --border:           rgba(255, 255, 255, 0.06);
-  --border-2:         rgba(255, 255, 255, 0.10);
+  --border:           rgba(245, 240, 232, 0.07);
+  --border-2:         rgba(245, 240, 232, 0.12);
 
-  /* Typography */
-  --text:             #e2e2e8;
-  --text-2:           #888898;
-  --text-3:           #4e4e64;
+  /* Typography — warm cream palette */
+  --text:             #F5F0E8;
+  --text-2:           #6B6577;
+  --text-3:           #3E3B4A;
 
-  /* Accent — warm amber */
-  --accent:           #c4924a;
-  --accent-2:         #d4a45e;
-  --accent-dim:       rgba(196, 146, 74, 0.10);
-  --accent-glow:      rgba(196, 146, 74, 0.22);
+  /* Accent — vivid terracotta-orange (editorial urgency) */
+  --accent:           #FF4B1F;
+  --accent-2:         #FFB347;
+  --accent-dim:       rgba(255, 75, 31, 0.09);
+  --accent-glow:      rgba(255, 75, 31, 0.18);
 
   /* Semantic colours */
-  --positive:         #4da882;
-  --negative:         #c45850;
-  --neutral-color:    #6070a8;
+  --positive:         #3EC97B;
+  --negative:         #E44B4B;
+  --neutral-color:    #8A85A0;
 
   /* ── Legacy aliases — keep all existing page CSS working ── */
   --bg-dark:          var(--bg);
@@ -40,7 +40,7 @@
   --text-muted:       var(--text-2);
   --primary:          var(--accent);
   --primary-hover:    var(--accent-2);
-  --glass:            rgba(17, 17, 20, 0.96);
+  --glass:            rgba(15, 14, 18, 0.97);
   --border-light:     var(--border);
   --nav-height:       0px;
 }
@@ -95,7 +95,7 @@ a { color: inherit; text-decoration: none; }
 
 .sidebar:hover {
   width: var(--sidebar-expanded);
-  box-shadow: 6px 0 32px rgba(0, 0, 0, 0.5);
+  box-shadow: 6px 0 40px rgba(0, 0, 0, 0.7);
 }
 
 /* Brand */
