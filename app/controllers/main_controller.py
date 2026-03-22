@@ -400,12 +400,10 @@ def trends():
                             # Truly new topic — kick off a new background thread
                             job_tracker.mark_processing(current_user_id, current_topic)
                             app = current_app._get_current_object()
-                            user_email     = user.get_email()
-                            user_firstname = user.get_first_name()
 
                             thread = threading.Thread(
                                 target=_background_analyse_user_topic,
-                                args=(app, current_user_id, user_email, user_firstname, current_topic),
+                                args=(app, current_user_id, current_topic),
                                 daemon=True,
                             )
                             thread.start()
@@ -1147,9 +1145,9 @@ def _build_yt_video_cards(df_youtube: pd.DataFrame) -> list:
     return sorted(cards, key=lambda x: x["comment_count"], reverse=True)
 
 
-def _background_analyse_user_topic(app, user_id, user_email, first_name, topic_name):
+def _background_analyse_user_topic(app, user_id, topic_name):
     """Delegates to app.services.analysis_service.run_background_analysis."""
-    run_background_analysis(app, user_id, user_email, first_name, topic_name)
+    run_background_analysis(app, user_id, topic_name)
 
 
 @main_bp.route("/api/topic_status")
@@ -1166,8 +1164,27 @@ def api_topic_status():
     if not topic:
         return jsonify({"status": "missing_topic"}), 400
 
-    status = job_tracker.get_status(user.get_user_id(), topic)
-    return jsonify({"status": status or "not_found"})
+    user_id = user.get_user_id()
+    status = job_tracker.get_status(user_id, topic)
+    step   = job_tracker.get_step(user_id, topic)
+
+    if status in (None, "not_found"):
+        # DB fallback: if analysis completed on a different instance or after a restart,
+        # check whether the topic already has data in the database.
+        try:
+            from app.services.supabase_client import admin_supabase
+            topic_res = admin_supabase.table("topics").select("id") \
+                .eq("name", topic).eq("user_id", str(user_id)).limit(1).execute()
+            if topic_res.data:
+                tid = topic_res.data[0]["id"]
+                cnt = admin_supabase.table("comments").select("id", count="exact") \
+                    .eq("topic_id", tid).limit(1).execute()
+                if cnt.count and cnt.count > 0:
+                    return jsonify({"status": "complete", "step": None})
+        except Exception:
+            pass
+
+    return jsonify({"status": status or "not_found", "step": step})
 
 
 def background_run_topic(topic_name):

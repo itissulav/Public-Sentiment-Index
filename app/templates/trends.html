@@ -169,18 +169,16 @@
     <div class="job-pulse-ring"><div class="job-pulse-dot"></div></div>
     <h2 class="job-title">Analysing <span class="job-topic-name">{{ current_topic }}</span></h2>
     <p class="job-desc">
-      We're scraping Reddit and running AI sentiment analysis in the background.<br>
-      You can close this tab — we'll email you when the results are ready.
+      We're scraping Reddit and YouTube and running AI sentiment analysis in the background.<br>
+      You can close this tab and come back later.
     </p>
     <div class="job-steps">
-      <div class="job-step" id="step-fetch"><span class="step-dot active"></span><span class="step-label">Fetching Reddit comments</span></div>
+      <div class="job-step" id="step-fetch"><span class="step-dot active"></span><span class="step-label">Fetching Reddit &amp; YouTube comments</span></div>
       <div class="job-step" id="step-analyse"><span class="step-dot"></span><span class="step-label">Running sentiment model</span></div>
       <div class="job-step" id="step-store"><span class="step-dot"></span><span class="step-label">Storing results</span></div>
-      <div class="job-step" id="step-email"><span class="step-dot"></span><span class="step-label">Sending you an email</span></div>
     </div>
     <p class="job-note">
-      This usually takes <strong>5 – 10 minutes</strong>.
-      You'll receive an email at <strong>{{ user.get_email() }}</strong> when it's done.
+      This usually takes <strong>5 – 10 minutes</strong>. Results will be ready on this page.
     </p>
     <a href="{{ url_for('main.home') }}" class="job-home-btn">← Back to Home</a>
   </div>
@@ -189,27 +187,31 @@
 <script>
 (function () {
   const topic = {{ current_topic | tojson }};
-  const steps = ['step-fetch', 'step-analyse', 'step-store', 'step-email'];
-  let stepIdx = 0;
-  const stepTimer = setInterval(() => {
-    if (stepIdx < steps.length - 1) {
-      document.getElementById(steps[stepIdx]).querySelector('.step-dot').classList.replace('active','done');
-      stepIdx++;
-      document.getElementById(steps[stepIdx]).querySelector('.step-dot').classList.add('active');
-    }
-  }, 90000);
+  const steps = ['step-fetch', 'step-analyse', 'step-store'];
+  const stepMap = { fetching: 0, classifying: 1, storing: 2 };
+
   const pollTimer = setInterval(async () => {
     try {
       const res  = await fetch(`/api/topic_status?topic=${encodeURIComponent(topic)}`);
       const data = await res.json();
+
+      // Update step indicators based on real backend state
+      if (data.step && stepMap[data.step] !== undefined) {
+        const idx = stepMap[data.step];
+        steps.forEach((id, i) => {
+          const dot = document.getElementById(id).querySelector('.step-dot');
+          dot.className = 'step-dot' + (i < idx ? ' done' : i === idx ? ' active' : '');
+        });
+      }
+
       if (data.status === 'complete') {
-        clearInterval(pollTimer); clearInterval(stepTimer);
+        clearInterval(pollTimer);
         steps.forEach(id => { const d = document.getElementById(id).querySelector('.step-dot'); d.classList.remove('active'); d.classList.add('done'); });
         const form = document.createElement('form'); form.method = 'POST'; form.action = '/trends';
         const inp = document.createElement('input'); inp.type='hidden'; inp.name='topic'; inp.value=topic;
         form.appendChild(inp); document.body.appendChild(form); form.submit();
       } else if (data.status === 'failed') {
-        clearInterval(pollTimer); clearInterval(stepTimer);
+        clearInterval(pollTimer);
         document.querySelector('.job-desc').innerHTML = 'The analysis encountered an error. Please <a href="/trends" style="color:#4facfe">try again</a>.';
       }
     } catch (_) {}

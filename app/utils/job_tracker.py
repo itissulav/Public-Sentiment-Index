@@ -6,6 +6,7 @@ import threading
 
 _lock = threading.Lock()
 _jobs: dict[tuple, str] = {}
+_steps: dict[tuple, str] = {}
 
 
 def _key(user_id, topic_name: str) -> tuple:
@@ -19,12 +20,16 @@ def mark_processing(user_id, topic_name: str):
 
 def mark_complete(user_id, topic_name: str):
     with _lock:
-        _jobs[_key(user_id, topic_name)] = "complete"
+        k = _key(user_id, topic_name)
+        _jobs[k] = "complete"
+        _steps.pop(k, None)
 
 
 def mark_failed(user_id, topic_name: str):
     with _lock:
-        _jobs[_key(user_id, topic_name)] = "failed"
+        k = _key(user_id, topic_name)
+        _jobs[k] = "failed"
+        _steps.pop(k, None)
 
 
 def get_status(user_id, topic_name: str) -> str | None:
@@ -33,6 +38,19 @@ def get_status(user_id, topic_name: str) -> str | None:
         return _jobs.get(_key(user_id, topic_name))
 
 
+def set_step(user_id, topic_name: str, step: str):
+    """Set the current granular step: 'fetching' | 'classifying' | 'storing'."""
+    with _lock:
+        _steps[_key(user_id, topic_name)] = step
+
+
+def get_step(user_id, topic_name: str) -> str | None:
+    with _lock:
+        return _steps.get(_key(user_id, topic_name))
+
+
 def clear(user_id, topic_name: str):
     with _lock:
-        _jobs.pop(_key(user_id, topic_name), None)
+        k = _key(user_id, topic_name)
+        _jobs.pop(k, None)
+        _steps.pop(k, None)

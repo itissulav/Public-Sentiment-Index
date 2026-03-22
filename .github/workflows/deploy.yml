@@ -40,6 +40,9 @@ jobs:
             --platform managed \
             --allow-unauthenticated \
             --memory 512Mi \
+            --no-cpu-throttling \
+            --min-instances 1 \
+            --timeout 3600 \
             --set-env-vars "\
           SUPABASE_URL=${{ secrets.SUPABASE_URL }},\
           SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }},\

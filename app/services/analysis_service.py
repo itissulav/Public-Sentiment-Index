@@ -1,7 +1,7 @@
 """
 app/services/analysis_service.py
 =================================
-Orchestrates the background scrape → classify → store → notify pipeline
+Orchestrates the background scrape → classify → store pipeline
 for user-submitted custom topics.
 """
 
@@ -28,14 +28,8 @@ def purge_user_topic(user_id, topic_name):
         print(f"[bg] Purge error: {e}")
 
 
-def run_background_analysis(app, user_id, user_email, first_name, topic_name):
-    """Scrape → analyse → store → email for a user's custom topic."""
-    from app.utils import job_tracker
-    from app.api.reddit import get_reddit_comments
-    from app.api.huggingface import process_and_store_comments
-    from app.utils.mailer import send_analysis_ready_email
-    from app.utils.gemini_sources import get_sources_for_topic
-
+def run_background_analysis(app, user_id, topic_name):
+    """Scrape → analyse → store for a user's custom topic."""
     # Hard limits for custom topics — keeps HF API load manageable
     REDDIT_CAP       = 1500
     COMMENTS_PER_SUB = 300
@@ -46,6 +40,12 @@ def run_background_analysis(app, user_id, user_email, first_name, topic_name):
 
     with app.app_context():
         try:
+            import traceback
+            from app.utils import job_tracker
+            from app.api.reddit import get_reddit_comments
+            from app.api.huggingface import process_and_store_comments
+            from app.utils.gemini_sources import get_sources_for_topic
+
             print(f"[bg] Starting analysis for user={user_id} topic='{topic_name}'")
 
             # Step 0: Purge any existing data for this topic before fresh run
@@ -56,7 +56,8 @@ def run_background_analysis(app, user_id, user_email, first_name, topic_name):
             subreddits = (sources.get("subreddits") or ["all"])[:MAX_SUBREDDITS]
             print(f"[bg] Gemini sources: category={sources.get('category')}, subreddits={subreddits}")
 
-            # Step 2: Fetch up to COMMENTS_PER_SUB comments from each subreddit
+            # Step 2: Fetch Reddit comments
+            job_tracker.set_step(user_id, topic_name, "fetching")
             all_dfs = []
             for sub in subreddits:
                 try:
@@ -81,6 +82,7 @@ def run_background_analysis(app, user_id, user_email, first_name, topic_name):
             print(f"[bg] Combined: {len(df)} unique Reddit comments")
 
             # Step 3: Classify via HF API + store in DB
+            job_tracker.set_step(user_id, topic_name, "classifying")
             process_and_store_comments(topic_name, df, user_id, source_type="reddit", mode="api")
 
             # Step 3b: YouTube — cap at YT_PER_VIDEO per video, MAX_YT_VIDEOS videos
@@ -130,6 +132,7 @@ def run_background_analysis(app, user_id, user_email, first_name, topic_name):
                         print(f"[bg] YouTube fetch error for video '{vid_id}': {e}")
 
             # Step 4: Store Gemini-discovered sources and update category
+            job_tracker.set_step(user_id, topic_name, "storing")
             try:
                 topic_res = admin_supabase.table("topics").select("id") \
                     .eq("name", topic_name).eq("user_id", user_id).execute()
@@ -160,12 +163,15 @@ def run_background_analysis(app, user_id, user_email, first_name, topic_name):
                 print(f"[bg] Source storage error (non-fatal): {e}")
 
             job_tracker.mark_complete(user_id, topic_name)
-            print(f"[bg] Analysis complete for '{topic_name}' — sending email to {user_email}")
-
-            base_url = app.config.get("APP_BASE_URL", "http://127.0.0.1:5000")
-            send_analysis_ready_email(user_email, first_name, topic_name, base_url)
+            print(f"[bg] Analysis complete for '{topic_name}'")
 
         except Exception as e:
+            import traceback
             print(f"[bg] Analysis failed for '{topic_name}': {e}")
-            job_tracker.mark_failed(user_id, topic_name)
+            traceback.print_exc()
+            try:
+                from app.utils import job_tracker
+                job_tracker.mark_failed(user_id, topic_name)
+            except Exception:
+                pass
             purge_user_topic(user_id, topic_name)

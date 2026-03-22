@@ -138,7 +138,10 @@
     </form>
     <div id="scanPill" style="display:none">
       <span class="scan-pill-dot"></span>
-      <span id="scanPillText">Analysing…</span>
+      <div class="scan-pill-body">
+        <span class="scan-pill-label">Custom Analysis</span>
+        <span id="scanPillText">Analysing…</span>
+      </div>
       <button type="button" class="scan-pill-link"
         onclick="document.getElementById('scanPillTopic').value=sessionStorage.getItem('activeScan')||'';document.getElementById('scanPillForm').submit()">View →</button>
     </div>
