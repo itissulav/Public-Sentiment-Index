@@ -151,6 +151,18 @@
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.ai-loading-pulse {
+  display: inline-block;
+  font-size: 0.8rem;
+  color: var(--muted);
+  opacity: 0.5;
+  animation: ai-pulse 1.4s ease-in-out infinite;
+}
+@keyframes ai-pulse {
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 1; }
+}
+
 /* ── Landing right: featured topics ── */
 .landing-right {
   display: flex;

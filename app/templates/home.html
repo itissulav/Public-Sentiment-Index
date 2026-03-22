@@ -33,13 +33,13 @@
       <p>You have <strong style="color:#f5f0e8;">{{ saved_scan_count }}</strong> sentiment report{{ 's' if saved_scan_count != 1 else '' }} waiting.</p>
       <a href="{{ url_for('main.history') }}" class="btn-outline mt-3">View History</a>
     </div>
-    <div class="glass-card profile-card">
+    <a href="{{ url_for('main.profile') }}" class="glass-card profile-card">
       <div class="profile-avatar">{{ user.get_first_name()[0] }}{{ user.get_last_name()[0] }}</div>
       <div class="profile-details">
         <h3>@{{ user.get_username() }}</h3>
         <p class="role-text">{{ user.get_role() }}</p>
       </div>
-    </div>
+    </a>
   </div>
 
   <!-- Featured Topics magazine grid -->

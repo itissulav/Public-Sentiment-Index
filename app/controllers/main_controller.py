@@ -959,6 +959,79 @@ def profile():
     return render_template("profile.html", user=user, scan_count=scan_count)
 
 
+@main_bp.route("/notifications")
+def notifications():
+    """Notifications page — PSI shifts and completed user scans."""
+    from datetime import date, timedelta
+
+    user_data = session.get("user")
+    user = User.from_dict(user_data) if user_data else None
+
+    # ── PSI Shifts (predefined topics, public) ──────────────────────
+    SHIFT_THRESHOLD = 10
+    shifts = []
+    try:
+        cutoff = (date.today() - timedelta(days=30)).isoformat()
+        topics_res = admin_supabase.table("topics").select("id,name").is_("user_id", "null").execute()
+        topics_list = topics_res.data or []
+        if topics_list:
+            topic_ids = [t["id"] for t in topics_list]
+            snaps_res = admin_supabase.table("daily_snapshots") \
+                .select("topic_id,snapshot_date,psi_rating") \
+                .in_("topic_id", topic_ids) \
+                .gte("snapshot_date", cutoff) \
+                .order("snapshot_date") \
+                .execute()
+            id_to_name = {t["id"]: t["name"] for t in topics_list}
+            by_topic = {}
+            for s in (snaps_res.data or []):
+                by_topic.setdefault(s["topic_id"], []).append(s)
+            for tid, rows in by_topic.items():
+                psi = [round(r["psi_rating"] or 0, 1) for r in rows]
+                if len(psi) < 2:
+                    continue
+                day_delta = psi[-1] - psi[-2]
+                if abs(day_delta) >= SHIFT_THRESHOLD:
+                    shifts.append({
+                        "name": id_to_name.get(tid, ""),
+                        "delta": round(day_delta, 1),
+                        "direction": "up" if day_delta > 0 else "down",
+                        "date": rows[-1]["snapshot_date"],
+                        "latest_psi": round(psi[-1], 1),
+                    })
+        shifts.sort(key=lambda x: abs(x["delta"]), reverse=True)
+    except Exception as e:
+        print(f"[notifications] shifts error: {e}")
+
+    # ── Completed scans (user-specific) ────────────────────────────
+    completed_scans = []
+    if user:
+        try:
+            res = admin_supabase.table("topics") \
+                .select("id,name,created_at") \
+                .eq("user_id", user.get_user_id()) \
+                .order("created_at", desc=True) \
+                .execute()
+            for t in (res.data or []):
+                snap = admin_supabase.table("daily_snapshots") \
+                    .select("snapshot_date,psi_rating") \
+                    .eq("topic_id", t["id"]) \
+                    .order("snapshot_date", desc=True).limit(1).execute()
+                if snap.data:
+                    t["completed_date"] = snap.data[0]["snapshot_date"]
+                    t["psi_rating"] = round(snap.data[0]["psi_rating"] or 0, 1)
+                    completed_scans.append(t)
+        except Exception as e:
+            print(f"[notifications] scans error: {e}")
+
+    return render_template(
+        "notifications.html",
+        user=user,
+        shifts=shifts,
+        completed_scans=completed_scans,
+    )
+
+
 @main_bp.route("/history")
 def history():
     user_data = session.get("user")

@@ -81,6 +81,12 @@
           <span class="item-icon"><i data-lucide="clock-3"></i></span>
           <span class="item-label">History</span>
         </a>
+
+        <a href="{{ url_for('main.notifications') }}"
+           class="sidebar-item {% if request.endpoint == 'main.notifications' %}active{% endif %}">
+          <span class="item-icon"><i data-lucide="bell"></i></span>
+          <span class="item-label">Notifications</span>
+        </a>
         {% endif %}
         {% endif %}
 
@@ -126,6 +132,13 @@
     <!-- ── Page content ───────────────────────────────── -->
     <main class="content-wrapper">{% block content %}{% endblock %}</main>
 
+    <!-- Scan progress pill -->
+    <div id="scanPill" style="display:none">
+      <span class="scan-pill-dot"></span>
+      <span id="scanPillText">Analysing…</span>
+      <a id="scanPillLink" href="/trends" class="scan-pill-link">View →</a>
+    </div>
+
     <!-- Lucide icons runtime -->
     <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
     <script>
@@ -141,6 +154,41 @@
       }
       if (btn)      btn.addEventListener('click', toggleSidebar);
       if (backdrop) backdrop.addEventListener('click', toggleSidebar);
+
+      // Scan progress pill
+      (function () {
+        const pill     = document.getElementById('scanPill');
+        const pillText = document.getElementById('scanPillText');
+        if (!pill) return;
+
+        const onTrendsPage = window.location.pathname === '/trends';
+        const activeTopic  = sessionStorage.getItem('activeScan');
+        if (!activeTopic || onTrendsPage) return;
+
+        pillText.textContent = 'Analysing \u201c' + activeTopic + '\u201d\u2026';
+        pill.style.display = 'flex';
+
+        const interval = setInterval(async function () {
+          try {
+            const r = await fetch('/api/topic_status?topic=' + encodeURIComponent(activeTopic));
+            const d = await r.json();
+            if (d.status === 'complete') {
+              clearInterval(interval);
+              pill.style.borderLeftColor = '#10b981';
+              pill.querySelector('.scan-pill-dot').style.background = '#10b981';
+              pillText.textContent = '\u201c' + activeTopic + '\u201d analysis ready';
+              setTimeout(function () {
+                pill.style.display = 'none';
+                sessionStorage.removeItem('activeScan');
+              }, 5000);
+            } else if (d.status === 'failed' || d.status === 'not_found') {
+              clearInterval(interval);
+              pill.style.display = 'none';
+              sessionStorage.removeItem('activeScan');
+            }
+          } catch (e) {}
+        }, 10000);
+      })();
     </script>
 
   </body>

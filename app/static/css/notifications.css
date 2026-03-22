@@ -1,0 +1,199 @@
+/* ============================================================
+   NOTIFICATIONS PAGE
+   ============================================================ */
+
+/* ── Hero ──────────────────────────────────────────────────── */
+.notif-hero {
+  border-bottom: 1px solid var(--border);
+  padding: 60px 5% 40px;
+  position: relative;
+  overflow: hidden;
+}
+
+.notif-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 50% 80% at 5% 50%, rgba(255,94,58,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.notif-hero-inner { position: relative; z-index: 1; }
+
+.notif-eyebrow {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  display: block;
+  margin-bottom: 12px;
+}
+
+.notif-title {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(1.8rem, 3.5vw, 2.8rem);
+  font-weight: 900;
+  color: var(--text);
+  margin: 0 0 8px;
+  line-height: 1.05;
+}
+
+.notif-sub {
+  font-size: 0.88rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* ── Section ────────────────────────────────────────────────── */
+.notif-section {
+  padding: 32px 5% 0;
+}
+
+.notif-section:last-child {
+  padding-bottom: 48px;
+}
+
+.notif-section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.notif-section-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.notif-section-sub {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+/* ── List & Rows ────────────────────────────────────────────── */
+.notif-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.notif-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 16px 20px;
+}
+
+/* ── Icon ───────────────────────────────────────────────────── */
+.notif-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.04);
+}
+
+.notif-shift.notif-up   .notif-icon { color: #10b981; background: rgba(16,185,129,0.1); }
+.notif-shift.notif-down .notif-icon { color: #ef4444; background: rgba(239,68,68,0.1); }
+.notif-icon-done                    { color: #10b981; background: rgba(16,185,129,0.1); }
+
+/* ── Body ───────────────────────────────────────────────────── */
+.notif-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.notif-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 3px;
+}
+
+.notif-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.notif-delta {
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.notif-shift.notif-up   .notif-delta { color: #10b981; }
+.notif-shift.notif-down .notif-delta { color: #ef4444; }
+
+.notif-psi { font-size: 0.78rem; font-weight: 700; }
+.psi-pos   { color: #10b981; }
+.psi-neg   { color: #ef4444; }
+.psi-neu   { color: var(--muted); }
+
+.notif-meta {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+/* ── Action ─────────────────────────────────────────────────── */
+.notif-action {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-decoration: none;
+  flex-shrink: 0;
+  opacity: 0.75;
+  transition: opacity 0.15s;
+}
+
+.notif-action:hover { opacity: 1; }
+
+.notif-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+}
+
+/* ── Empty state ────────────────────────────────────────────── */
+.notif-empty {
+  padding: 80px 5%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.notif-empty i { width: 40px; height: 40px; opacity: 0.3; }
+
+.notif-empty p {
+  font-family: 'Syne', sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.notif-empty span {
+  font-size: 0.82rem;
+}
+
+/* ── Responsive ─────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .notif-action { display: none; }
+  .notif-row    { padding: 14px 16px; }
+}

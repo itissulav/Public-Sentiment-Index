@@ -1579,6 +1579,28 @@ document.addEventListener('DOMContentLoaded', function () {
   const el = document.querySelector('[data-topic-id]');
   if (!el || !el.dataset.topicId) return;
 
+  // Show AI cards immediately with loading placeholders
+  const ctxBar  = document.getElementById('gemini-topic-context-bar');
+  const ctxText = document.getElementById('gemini-topic-context-text');
+  if (ctxBar && ctxText) {
+    ctxText.innerHTML = '<span class="ai-loading-pulse">Generating AI context\u2026</span>';
+    ctxBar.style.display = '';
+  }
+  const narrativeWrap = document.querySelector('.narrative-wrap');
+  const narrativeBody = document.getElementById('narrativeCard');
+  const narrativeTopic = document.getElementById('narrativeTopicLabel');
+  if (narrativeWrap && narrativeBody) {
+    if (narrativeTopic) narrativeTopic.textContent = el.dataset.topicName || '';
+    narrativeBody.innerHTML = '<span class="ai-loading-pulse">Writing editorial analysis\u2026</span>';
+    narrativeWrap.style.display = '';
+  }
+  const clusterWrap = document.querySelector('.cluster-wrap');
+  if (clusterWrap) {
+    const cg = clusterWrap.querySelector('.cluster-grid');
+    if (cg) cg.innerHTML = '<span class="ai-loading-pulse">Identifying opinion clusters\u2026</span>';
+    clusterWrap.style.display = '';
+  }
+
   const fd = new FormData();
   fd.append('topic_id',   el.dataset.topicId);
   fd.append('topic_name', el.dataset.topicName || '');
@@ -2035,12 +2057,34 @@ document.addEventListener('DOMContentLoaded', function () {
     btn.addEventListener('click', () => startLoadingUI(false));
   });
 
+  // Loading UI on predefined topic form submits (hero list)
+  document.querySelectorAll('.hero-list-form').forEach(form => {
+    form.addEventListener('submit', () => {
+      const b = form.querySelector('button');
+      if (b) b.disabled = true;
+      const pText = document.getElementById('progressText');
+      const pPct  = document.getElementById('progressPercent');
+      const pBar  = document.getElementById('progressBar');
+      const loader = document.getElementById('loadingIndicator');
+      if (pText) pText.textContent = 'Loading analysis…';
+      if (pPct)  pPct.textContent  = '';
+      if (pBar)  { pBar.style.transition = 'none'; pBar.style.width = '0%'; }
+      if (loader) loader.style.display = 'flex';
+      setTimeout(() => {
+        if (pBar) { pBar.style.transition = 'width 2s ease-out'; pBar.style.width = '70%'; }
+      }, 50);
+    });
+  });
+
   // Progress polling on search form submit
   const searchForm = document.getElementById('searchForm');
   if (searchForm) {
     let pollInterval;
     searchForm.addEventListener('submit', function () {
       startLoadingUI(true);
+      // Store topic in sessionStorage so scan pill can track it on other pages
+      const topicVal = document.getElementById('topicInput')?.value?.trim();
+      if (topicVal) sessionStorage.setItem('activeScan', topicVal);
       const btn    = document.getElementById('analyzeBtn');
       const loader = document.getElementById('loadingIndicator');
       const pText  = document.getElementById('progressText');

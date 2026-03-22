@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Notifications{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/notifications.css') }}">{% endblock %}
+
+{% block content %}
+
+<div class="notif-hero">
+  <div class="notif-hero-inner">
+    <span class="notif-eyebrow">Activity</span>
+    <h1 class="notif-title">Notifications</h1>
+    <p class="notif-sub">Sentiment shifts across tracked topics and your completed scans.</p>
+  </div>
+</div>
+
+{% if not shifts and not completed_scans %}
+<div class="notif-empty">
+  <i data-lucide="bell-off"></i>
+  <p>No notifications yet.</p>
+  <span>Check back after the weekly analysis runs, or run a custom scan.</span>
+</div>
+
+{% else %}
+
+{% if shifts %}
+<div class="notif-section">
+  <div class="notif-section-header">
+    <span class="notif-section-title">Sentiment Shifts</span>
+    <span class="notif-section-sub">Topics with a significant PSI change overnight</span>
+  </div>
+  <div class="notif-list">
+    {% for s in shifts %}
+    <div class="notif-row notif-shift notif-{{ s.direction }}">
+      <div class="notif-icon">
+        {% if s.direction == 'up' %}
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+        {% else %}
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        {% endif %}
+      </div>
+      <div class="notif-body">
+        <div class="notif-title-row">
+          <span class="notif-name">{{ s.name }}</span>
+          <span class="notif-delta">{% if s.direction == 'up' %}+{% endif %}{{ s.delta }} pts overnight</span>
+        </div>
+        <div class="notif-meta">PSI now {{ s.latest_psi }} &middot; {{ s.date }}</div>
+      </div>
+      <a href="{{ url_for('main.pulse') }}" class="notif-action">View Pulse →</a>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if completed_scans %}
+<div class="notif-section">
+  <div class="notif-section-header">
+    <span class="notif-section-title">Completed Scans</span>
+    <span class="notif-section-sub">Your custom analyses that are ready to view</span>
+  </div>
+  <div class="notif-list">
+    {% for s in completed_scans %}
+    <form method="POST" action="{{ url_for('main.trends') }}" style="display:contents">
+      <input type="hidden" name="topic" value="{{ s.name }}">
+      <div class="notif-row notif-scan">
+        <div class="notif-icon notif-icon-done">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </div>
+        <div class="notif-body">
+          <div class="notif-title-row">
+            <span class="notif-name">{{ s.name }}</span>
+            {% set r = s.psi_rating %}
+            <span class="notif-psi {% if r > 0 %}psi-pos{% elif r < 0 %}psi-neg{% else %}psi-neu{% endif %}">
+              PSI {{ r }}
+            </span>
+          </div>
+          <div class="notif-meta">Completed {{ s.completed_date }}</div>
+        </div>
+        <button type="submit" class="notif-action notif-btn">View →</button>
+      </div>
+    </form>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% endif %}
+
+{% endblock %}
