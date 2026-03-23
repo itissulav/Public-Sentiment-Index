@@ -142,6 +142,8 @@ def trends():
     has_data         = False  # True only when comment data was successfully loaded
     current_topic_id = None   # Passed to template for the deep-dive AJAX endpoint
     topic_cover_url  = None   # Wikipedia image URL for custom (non-predefined) topics
+    selected_days    = 90     # 30 / 60 / 90 — time window for featured topic charts
+    is_featured      = False  # True when showing a predefined topic
 
     # Build search autocomplete suggestions: predefined + user history
     _TRENDS_IMG = {
@@ -165,19 +167,30 @@ def trends():
         except Exception:
             pass
 
-    if request.method == "POST":
-        topic_query    = request.form.get("topic")
-        topic_id_param = request.form.get("topic_id")   # set by View Analysis on history page
+    if request.method == "POST" or (request.method == "GET" and request.args.get("topic")):
+        if request.method == "GET":
+            topic_query    = request.args.get("topic")
+            topic_id_param = None
+            selected_days  = max(30, min(90, int(request.args.get("days", 90))))
+        else:
+            topic_query    = request.form.get("topic")
+            topic_id_param = request.form.get("topic_id")   # set by View Analysis on history page
+            selected_days  = max(30, min(90, int(request.form.get("days", 90))))
 
         if topic_query:
             current_topic = topic_query
+            # Normalise against predefined topics (case-insensitive)
+            _lower = current_topic.lower()
+            _canonical = next((t for t in _PREDEFINED_TOPICS if t.lower() == _lower), None)
+            if _canonical:
+                current_topic = _canonical
             # Fetch a cover image for non-predefined (custom) topics
             if current_topic not in _PREDEFINED_TOPICS:
                 topic_cover_url = _fetch_wiki_image(current_topic)
 
             # Helper to fetch, split by source, and build above-fold chart/insight bundles.
             # Deep-dive charts and Gemini are deferred to /trends/deep-dive (background AJAX).
-            def extract_and_visualize(t_id):
+            def extract_and_visualize(t_id, days=None):
                 nonlocal charts_data, charts_all, charts_reddit, charts_youtube, \
                          insights_data, insights_all, insights_reddit, insights_youtube, \
                          has_youtube, source_split, yt_video_cards, has_data, \
@@ -214,6 +227,17 @@ def trends():
 
                 if not all_rows:
                     return False
+
+                # Apply time window filter for featured topics (days=30/60/90)
+                if days and days < 90:
+                    from datetime import datetime, timedelta, timezone
+                    _cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+                    all_rows = [
+                        r for r in all_rows
+                        if r.get("published_at") and str(r["published_at"]) >= _cutoff
+                    ]
+                    if not all_rows:
+                        return False
 
                 df_all     = pd.DataFrame(all_rows)
                 df_reddit  = df_all[df_all["source_type"] == "reddit"].copy() \
@@ -315,6 +339,7 @@ def trends():
 
             elif current_topic in PREDEFINED_TOPICS:
                 # 1. PREDEFINED TOPIC: Pull dynamically from relational DB schema
+                is_featured = True
                 topic_res = admin_supabase.table("topics") \
                                           .select("id") \
                                           .eq("name", current_topic) \
@@ -332,7 +357,7 @@ def trends():
                     topic_info["sentiment"] = "Positive" if (topic_info.get("rating") or 0) > 0 else ("Negative" if (topic_info.get("rating") or 0) < 0 else "Neutral")
                     count_res = admin_supabase.table("comments").select("id", count="exact").eq("topic_id", topic_id).execute()
                     topic_info["total_comments"] = count_res.count or 0
-                    if not extract_and_visualize(topic_id):
+                    if not extract_and_visualize(topic_id, days=selected_days):
                         flash(f"No comments found for predefined topic: {current_topic}")
                 else:
                     flash(f"No database records found for preset topic: {current_topic}. Please run the seeder script first!")
@@ -343,6 +368,8 @@ def trends():
 
                 if not user:
                     flash("You must be logged in to analyse a custom topic.")
+                elif not current_user_id:
+                    flash("Your session has expired. Please log in again.")
                 else:
                     existing_status = job_tracker.get_status(current_user_id, current_topic)
 
@@ -397,17 +424,40 @@ def trends():
                             topic_info["total_comments"] = count_res.count or 0
                             extract_and_visualize(topic_id)
                         else:
-                            # Truly new topic — kick off a new background thread
-                            job_tracker.mark_processing(current_user_id, current_topic)
-                            app = current_app._get_current_object()
+                            # Cross-user cache: reuse any recent scan of the same topic (within 7 days)
+                            from datetime import datetime, timedelta, timezone
+                            _week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+                            cached_res = admin_supabase.table("topics") \
+                                                       .select("id") \
+                                                       .ilike("name", current_topic) \
+                                                       .gte("created_at", _week_ago) \
+                                                       .limit(1) \
+                                                       .execute()
+                            if cached_res.data:
+                                # Another user's recent scan exists — reuse it instantly
+                                topic_id = cached_res.data[0]["id"]
+                                snap = admin_supabase.table("daily_snapshots") \
+                                    .select("psi_rating, dominant_emotion, total_comments") \
+                                    .eq("topic_id", topic_id).order("snapshot_date", desc=True).limit(1).execute()
+                                topic_info = snap.data[0] if snap.data else {}
+                                topic_info["rating"]    = topic_info.pop("psi_rating", 0)
+                                topic_info["name"]      = current_topic
+                                topic_info["sentiment"] = "Positive" if (topic_info.get("rating") or 0) > 0 else ("Negative" if (topic_info.get("rating") or 0) < 0 else "Neutral")
+                                count_res = admin_supabase.table("comments").select("id", count="exact").eq("topic_id", topic_id).execute()
+                                topic_info["total_comments"] = count_res.count or 0
+                                extract_and_visualize(topic_id)
+                            else:
+                                # Truly new topic — kick off a new background thread
+                                job_tracker.mark_processing(current_user_id, current_topic)
+                                app = current_app._get_current_object()
 
-                            thread = threading.Thread(
-                                target=_background_analyse_user_topic,
-                                args=(app, current_user_id, current_topic),
-                                daemon=True,
-                            )
-                            thread.start()
-                            job_status = "processing"
+                                thread = threading.Thread(
+                                    target=_background_analyse_user_topic,
+                                    args=(app, current_user_id, current_topic),
+                                    daemon=True,
+                                )
+                                thread.start()
+                                job_status = "processing"
 
     else:
         # GET request: Render completely empty to wait for user interaction
@@ -443,6 +493,8 @@ def trends():
         topic_id_for_deep_dive=current_topic_id,
         topic_cover_url=topic_cover_url,
         suggestions=suggestions,
+        selected_days=selected_days,
+        is_featured=is_featured,
     )
 
 

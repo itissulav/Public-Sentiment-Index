@@ -106,13 +106,15 @@
   <div class="landing-left">
     <span class="landing-eyebrow">Public Sentiment Index</span>
     <h1 class="landing-headline">What is the world<br>saying about <em>anything</em>?</h1>
-    <p class="landing-sub">Search any topic to instantly analyze thousands of Reddit and YouTube comments with AI-powered sentiment analysis.</p>
 
     <div class="search-container">
+      <p class="landing-section-label">Custom Topic Analysis
+        <span class="landing-section-note">Deep scan via Reddit &amp; YouTube &middot; 5–10 minutes</span>
+      </p>
       <div class="trends-search-wrap">
         <form method="POST" action="{{ url_for('main.trends') }}" class="topic-search-form" id="searchForm">
           <input type="text" name="topic" id="trendsSearchInput" placeholder="Bitcoin, Taylor Swift, Gaza…" required class="search-input"
-                 autocomplete="off" value="{{ current_topic if current_topic else '' }}">
+                 autocomplete="off" value="{{ current_topic if current_topic and not is_featured else '' }}">
           <button type="submit" class="search-btn" id="analyzeBtn">Analyze</button>
         </form>
         <div class="trends-search-dropdown" id="trendsSearchDropdown"></div>
@@ -131,7 +133,7 @@
 
   <!-- Right: featured topics editorial list -->
   <div class="landing-right">
-    <p class="landing-right-label">Featured Topics</p>
+    <p class="landing-right-label">Featured Topics &mdash; <span style="font-weight:400;opacity:0.7;">Pre-analyzed &middot; instant results</span></p>
     {% set presets = [
       ("Donald Trump",      "donaldtrump.png"),
       ("The Boys",          "theboys.png"),
@@ -321,6 +323,21 @@
     <div id="all-clusterGrid" class="cluster-grid"></div>
   </div>
 </div>
+
+<!-- ── TIME RANGE PILLS (featured topics only) ──────────────────── -->
+{% if is_featured and has_data %}
+<div class="time-range-wrap">
+  <span class="time-range-label">Time range:</span>
+  <div class="time-pills">
+    <a href="{{ url_for('main.trends') }}?topic={{ current_topic | urlencode }}&days=30"
+       class="time-pill {% if selected_days == 30 %}active{% endif %}">30D</a>
+    <a href="{{ url_for('main.trends') }}?topic={{ current_topic | urlencode }}&days=60"
+       class="time-pill {% if selected_days == 60 %}active{% endif %}">60D</a>
+    <a href="{{ url_for('main.trends') }}?topic={{ current_topic | urlencode }}&days=90"
+       class="time-pill {% if selected_days == 90 %}active{% endif %}">90D</a>
+  </div>
+</div>
+{% endif %}
 
 <!-- ── PLATFORM TOGGLE ──────────────────────────────────────────── -->
 <div class="platform-toggle-wrap">
@@ -1955,6 +1972,7 @@ function _hidePanelLoader(name) {
 }
 
 function switchPlatform(name, btn) {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
   document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
   document.querySelectorAll('.ptoggle-btn').forEach(b => b.classList.remove('active'));
   const panel = document.getElementById('panel-' + name);
@@ -2077,6 +2095,19 @@ document.addEventListener('DOMContentLoaded', function () {
       }, 50);
     });
   });
+
+  // Auto-scroll to processing card when a background job is active
+  (function () {
+    const jobStatus = "{{ job_status | default('') }}";
+    if (jobStatus === 'processing') {
+      const card = document.querySelector('.job-processing-wrap');
+      if (card) {
+        setTimeout(function () {
+          card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 200);
+      }
+    }
+  })();
 
   // Progress polling on search form submit
   const searchForm = document.getElementById('searchForm');

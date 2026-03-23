@@ -170,7 +170,34 @@
   overflow: hidden;
 }
 
-.landing-right-label { display: none; }
+.landing-right-label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  padding: 14px 28px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.landing-section-label {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.landing-section-note {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--text-2);
+  letter-spacing: 0;
+}
 
 .hero-list {
   display: flex;
@@ -480,6 +507,52 @@
 }
 
 /* ============================================================
+   TIME RANGE PILLS (30D / 60D / 90D)
+   ============================================================ */
+.time-range-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 5%;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.time-range-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.time-pills { display: flex; gap: 4px; }
+
+.time-pill {
+  display: inline-block;
+  padding: 5px 14px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.time-pill:hover {
+  color: var(--text);
+  background: var(--surface-3);
+}
+
+.time-pill.active {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-color: rgba(255, 75, 31, 0.25);
+}
+
+/* ============================================================
    PLATFORM TOGGLE — sticky underline tabs
    ============================================================ */
 .platform-toggle-wrap {
@@ -537,7 +610,12 @@
   grid-template-columns: repeat(6, 1fr);
   gap: 2px;
   align-items: start;
+  overflow-x: hidden;
 }
+
+.tab-panel { overflow-x: hidden; }
+
+.chart-card canvas { max-width: 100%; }
 
 /* Narrative sections */
 .narrative-section { padding: 48px 0 0; }

@@ -17,6 +17,7 @@
       <button class="pulse-period-btn" data-days="60">60D</button>
       <button class="pulse-period-btn" data-days="90">90D</button>
     </div>
+    <p id="dataRangeNote" style="display:none;font-size:0.78rem;color:var(--text-2);margin-top:8px;opacity:0.75;"></p>
   </div>
 </div>
 
@@ -209,6 +210,18 @@ function buildMovers(days) {
 }
 
 // ── Period toggle ────────────────────────────────────────────────
+function _updateDataRangeNote(days) {
+  const available = filterDates(days).length;
+  const note = document.getElementById('dataRangeNote');
+  if (!note) return;
+  if (available < days) {
+    note.textContent = `Only ${available} day${available !== 1 ? 's' : ''} of data available for this period.`;
+    note.style.display = 'block';
+  } else {
+    note.style.display = 'none';
+  }
+}
+
 document.querySelectorAll('.pulse-period-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.pulse-period-btn').forEach(b => b.classList.remove('active'));
@@ -217,8 +230,12 @@ document.querySelectorAll('.pulse-period-btn').forEach(btn => {
     initChart(activeDays);
     buildMovers(activeDays);
     buildHeatmap(activeDays);
+    _updateDataRangeNote(activeDays);
   });
 });
+
+// Show note on initial load
+_updateDataRangeNote(activeDays);
 
 // ── Emotion Heatmap ──────────────────────────────────────────────
 const EMO_COLORS = {
