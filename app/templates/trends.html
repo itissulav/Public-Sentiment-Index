@@ -329,12 +329,9 @@
 <div class="time-range-wrap">
   <span class="time-range-label">Time range:</span>
   <div class="time-pills">
-    <a href="{{ url_for('main.trends') }}?topic={{ current_topic | urlencode }}&days=30"
-       class="time-pill {% if selected_days == 30 %}active{% endif %}">30D</a>
-    <a href="{{ url_for('main.trends') }}?topic={{ current_topic | urlencode }}&days=60"
-       class="time-pill {% if selected_days == 60 %}active{% endif %}">60D</a>
-    <a href="{{ url_for('main.trends') }}?topic={{ current_topic | urlencode }}&days=90"
-       class="time-pill {% if selected_days == 90 %}active{% endif %}">90D</a>
+    <button class="time-pill {% if selected_days == 30 %}active{% endif %}" data-days="30" onclick="switchTimeWindow(30)">30D</button>
+    <button class="time-pill {% if selected_days == 60 %}active{% endif %}" data-days="60" onclick="switchTimeWindow(60)">60D</button>
+    <button class="time-pill {% if selected_days == 90 %}active{% endif %}" data-days="90" onclick="switchTimeWindow(90)">90D</button>
   </div>
 </div>
 {% endif %}
@@ -1209,16 +1206,19 @@
 <!-- ============================================================
      CHART.JS SCRIPTS
      ============================================================ -->
+{% if is_featured and time_windows %}
+<script type="application/json" id="psi-time-windows">{{ time_windows | tojson }}</script>
+{% endif %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 
 // ── Data from server ──────────────────────────────────────────
-const chartsAllRaw     = {{ charts_all | safe }};
-const chartsRedditRaw  = {{ charts_data | safe }};
-const chartsYoutubeRaw = {{ charts_youtube | safe }};
-const insightsAll      = {{ insights_all | tojson }};
-const insightsReddit   = {{ insights_data | tojson }};
-const insightsYoutube  = {{ insights_youtube | tojson }};
+let chartsAllRaw     = {{ charts_all | safe }};
+let chartsRedditRaw  = {{ charts_data | safe }};
+let chartsYoutubeRaw = {{ charts_youtube | safe }};
+let insightsAll      = {{ insights_all | tojson }};
+let insightsReddit   = {{ insights_data | tojson }};
+let insightsYoutube  = {{ insights_youtube | tojson }};
 const hasYoutube       = {{ 'true' if has_youtube else 'false' }};
 
 // ── Color helpers (global) ────────────────────────────────────
@@ -1404,6 +1404,7 @@ function renderTop10Cards(containerId, chart5Data) {
 
 function renderMomentumChart(canvasId, badgeId, momentumData) {
   if (!momentumData?.labels?.length) return;
+  _destroyChart(canvasId);
   const up = momentumData.direction === 'improving';
   const badge = document.getElementById(badgeId);
   if (badge) badge.innerHTML = `<span style="padding:5px 14px;border-radius:20px;font-size:0.75rem;font-weight:700;background:${up?'rgba(16,185,129,0.15)':'rgba(239,68,68,0.15)'};color:${up?'#10b981':'#ef4444'};border:1px solid ${up?'rgba(16,185,129,0.4)':'rgba(239,68,68,0.4)'};">${up?'Opinion Improving ↑':'Opinion Declining ↓'}</span>`;
@@ -1418,6 +1419,7 @@ function renderMomentumChart(canvasId, badgeId, momentumData) {
 
 function renderDonut(canvasId, chart1Data) {
   if (!chart1Data) return;
+  _destroyChart(canvasId);
   new Chart(document.getElementById(canvasId), {
     type: 'doughnut',
     data: { labels: chart1Data.labels, datasets: [{ data: chart1Data.values,
@@ -1430,6 +1432,7 @@ function renderDonut(canvasId, chart1Data) {
 
 function renderTimeline(canvasId, chart2Data) {
   if (!chart2Data) return;
+  _destroyChart(canvasId);
   const ds = chart2Data.datasets;
   new Chart(document.getElementById(canvasId), {
     type: 'line',
@@ -1798,6 +1801,51 @@ function _injectGeminiText(gemini, tab) {
   }
 }
 
+// ── Chart destruction helper ──────────────────────────────────
+function _destroyChart(canvasId) {
+  const existing = Chart.getChart(canvasId);
+  if (existing) existing.destroy();
+}
+
+// ── Instant time-window switching (30D / 60D / 90D) ──────────
+let _activeTimeWindow = {{ selected_days | default(90) }};
+const _timeWindowData = (function () {
+  try {
+    const el = document.getElementById('psi-time-windows');
+    return el ? JSON.parse(el.textContent) : null;
+  } catch (e) { return null; }
+})();
+
+function switchTimeWindow(days) {
+  if (!_timeWindowData || !_timeWindowData[String(days)]) return;
+  if (days === _activeTimeWindow) return;
+  _activeTimeWindow = days;
+
+  // Update pill active state
+  document.querySelectorAll('.time-pill').forEach(function (p) {
+    p.classList.toggle('active', parseInt(p.dataset.days) === days);
+  });
+
+  const d = _timeWindowData[String(days)];
+  chartsAllRaw     = d.all             || {};
+  chartsRedditRaw  = d.reddit          || {};
+  chartsYoutubeRaw = d.youtube         || {};
+  insightsAll      = d.insights_all    || {};
+  insightsReddit   = d.insights_reddit || {};
+  insightsYoutube  = d.insights_youtube || {};
+
+  // Reset rendered flags so panels are re-initialized with new data
+  _panelRendered = { all: false, reddit: false, youtube: false, compare: false };
+
+  // Re-render the currently active panel
+  const activeBtn = document.querySelector('.ptoggle-btn.active');
+  if (activeBtn) {
+    const match = activeBtn.getAttribute('onclick')?.match(/'(\w+)'/);
+    const activeName = match ? match[1] : 'all';
+    switchPlatform(activeName, activeBtn);
+  }
+}
+
 // ── Platform panel init ───────────────────────────────────────
 
 function initAllCharts() {
@@ -1972,7 +2020,6 @@ function _hidePanelLoader(name) {
 }
 
 function switchPlatform(name, btn) {
-  window.scrollTo({ top: 0, behavior: 'smooth' });
   document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
   document.querySelectorAll('.ptoggle-btn').forEach(b => b.classList.remove('active'));
   const panel = document.getElementById('panel-' + name);
@@ -1990,6 +2037,16 @@ function switchPlatform(name, btn) {
     if (name === 'reddit')  { _hidePanelLoader('reddit');  initRedditCharts();  }
     if (name === 'youtube') { _hidePanelLoader('youtube'); initYouTubeCharts(); }
     if (name === 'compare') initCompareCharts();
+  }
+
+  // Scroll to the Big Takeaway section in the new panel
+  if (panel) {
+    const section = panel.querySelector('.narrative-section');
+    if (section) {
+      setTimeout(function () {
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 80);
+    }
   }
 }
 
@@ -2110,39 +2167,51 @@ document.addEventListener('DOMContentLoaded', function () {
   })();
 
   // Progress polling on search form submit
+  const PREDEFINED_TOPIC_NAMES = ['Donald Trump', 'The Boys', 'Avengers Doomsday', 'Macbook Neo', 'America vs Iran'];
   const searchForm = document.getElementById('searchForm');
   if (searchForm) {
     let pollInterval;
     searchForm.addEventListener('submit', function () {
-      startLoadingUI(true);
-      // Store topic in sessionStorage so scan pill can track it on other pages
       const topicVal = document.getElementById('trendsSearchInput')?.value?.trim();
-      if (topicVal) sessionStorage.setItem('activeScan', topicVal);
-      const btn    = document.getElementById('analyzeBtn');
-      const loader = document.getElementById('loadingIndicator');
-      const pText  = document.getElementById('progressText');
-      const pBar   = document.getElementById('progressBar');
-      const pPct   = document.getElementById('progressPercent');
-      if (btn && loader) {
-        pollInterval = setInterval(async () => {
-          try {
-            const res  = await fetch('/api/fetch_progress');
-            const data = await res.json();
-            let pct = 0;
-            if (data.status === 'fetching' && data.total > 0) {
-              pct = Math.floor((data.current / data.total) * 90);
-              pText.textContent = `${data.message} (${data.current}/${data.total})`;
-            } else if (data.status === 'analyzing') {
-              pct = 95;
-              pText.textContent = data.message;
-            } else if (data.status === 'complete') {
-              pct = 100;
-              pText.textContent = `✓ ${data.message} Reloading…`;
-              clearInterval(pollInterval);
-            }
-            pBar.style.width = pct + '%'; pPct.innerText = pct + '%';
-          } catch (err) { console.error('Failed to poll progress:', err); }
-        }, 500);
+      const isPredef = PREDEFINED_TOPIC_NAMES.some(t => t.toLowerCase() === (topicVal || '').toLowerCase());
+
+      // Only track non-predefined topics in the scan pill
+      if (topicVal && !isPredef) {
+        sessionStorage.setItem('activeScan', topicVal);
+      }
+
+      if (isPredef) {
+        // Predefined topic: fast DB lookup — use simulated staged animation
+        startLoadingUI(false);
+      } else {
+        // Custom topic: background job — use real progress polling
+        startLoadingUI(true);
+        const btn    = document.getElementById('analyzeBtn');
+        const loader = document.getElementById('loadingIndicator');
+        const pText  = document.getElementById('progressText');
+        const pBar   = document.getElementById('progressBar');
+        const pPct   = document.getElementById('progressPercent');
+        if (btn && loader) {
+          pollInterval = setInterval(async () => {
+            try {
+              const res  = await fetch('/api/fetch_progress');
+              const data = await res.json();
+              let pct = 0;
+              if (data.status === 'fetching' && data.total > 0) {
+                pct = Math.floor((data.current / data.total) * 90);
+                pText.textContent = `${data.message} (${data.current}/${data.total})`;
+              } else if (data.status === 'analyzing') {
+                pct = 95;
+                pText.textContent = data.message;
+              } else if (data.status === 'complete') {
+                pct = 100;
+                pText.textContent = `✓ ${data.message} Reloading…`;
+                clearInterval(pollInterval);
+              }
+              pBar.style.width = pct + '%'; pPct.innerText = pct + '%';
+            } catch (err) { console.error('Failed to poll progress:', err); }
+          }, 500);
+        }
       }
     });
   }

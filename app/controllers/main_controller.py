@@ -144,6 +144,7 @@ def trends():
     topic_cover_url  = None   # Wikipedia image URL for custom (non-predefined) topics
     selected_days    = 90     # 30 / 60 / 90 — time window for featured topic charts
     is_featured      = False  # True when showing a predefined topic
+    time_windows     = {}     # Pre-computed {30: {...}, 60: {...}, 90: {...}} for client-side switching
 
     # Build search autocomplete suggestions: predefined + user history
     _TRENDS_IMG = {
@@ -359,6 +360,36 @@ def trends():
                     topic_info["total_comments"] = count_res.count or 0
                     if not extract_and_visualize(topic_id, days=selected_days):
                         flash(f"No comments found for predefined topic: {current_topic}")
+                    else:
+                        # Pre-compute chart+insight data for all 3 time windows so the
+                        # client can switch between 30D/60D/90D instantly without a reload.
+                        from app.utils.insights import compute_all_insights
+                        from datetime import datetime, timedelta, timezone
+                        _cached_rows = topic_cache.get(topic_id) or []
+                        time_windows = {}
+                        for _win in [30, 60, 90]:
+                            _cutoff = (datetime.now(timezone.utc) - timedelta(days=_win)).isoformat()
+                            _rows = [r for r in _cached_rows if r.get("published_at") and str(r["published_at"]) >= _cutoff]
+                            if _rows:
+                                _dfa = pd.DataFrame(_rows)
+                                _dfr = _dfa[_dfa["source_type"] == "reddit"].copy() if "source_type" in _dfa.columns else _dfa.copy()
+                                _dfy = _dfa[_dfa["source_type"] == "youtube"].copy() if "source_type" in _dfa.columns else pd.DataFrame()
+                                def _sc(df, po=True):
+                                    if df is None or df.empty: return {}
+                                    try: return ElectionDataVisualizer(df).get_all_charts_data(primary_only=po)
+                                    except: return {}
+                                def _si(df):
+                                    if df is None or df.empty: return {}
+                                    try: return compute_all_insights(df)
+                                    except: return {}
+                                time_windows[str(_win)] = {
+                                    "all":             _sc(_dfa),
+                                    "reddit":          _sc(_dfr),
+                                    "youtube":         _sc(_dfy),
+                                    "insights_all":    _si(_dfa),
+                                    "insights_reddit": _si(_dfr),
+                                    "insights_youtube": _si(_dfy),
+                                }
                 else:
                     flash(f"No database records found for preset topic: {current_topic}. Please run the seeder script first!")
                     
@@ -495,6 +526,7 @@ def trends():
         suggestions=suggestions,
         selected_days=selected_days,
         is_featured=is_featured,
+        time_windows=time_windows,
     )
 
 
