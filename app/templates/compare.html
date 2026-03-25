@@ -58,17 +58,9 @@
       <div class="compare-submit-row">
         <button type="submit" class="compare-btn" id="compareBtn">Compare Now</button>
 
-        <!-- Loading bar -->
-        <div id="compareLoader" style="display:none; flex:1; min-width:220px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <span id="loaderText" style="color:var(--text-2); font-size:0.85rem; font-weight:500;">
-              <span class="c-spinner"></span> Fetching and analysing topics…
-            </span>
-            <span id="loaderPct" style="color:var(--text-muted); font-size:0.8rem; font-weight:600;">0%</span>
-          </div>
-          <div style="width:100%; height:3px; background:rgba(255,255,255,0.07); overflow:hidden;">
-            <div id="loaderBar" style="width:0%; height:100%; background:var(--accent); transition:width 0.3s ease;"></div>
-          </div>
+        <!-- Loading indicator -->
+        <div id="compareLoader" style="display:none; align-items:center; gap:10px; color:var(--text-2); font-size:0.85rem; font-weight:500;">
+          <span class="c-spinner"></span> Comparing topics…
         </div>
       </div>
 
@@ -339,12 +331,15 @@
   <!-- ── HERO ─────────────────────────────────────────────── -->
   <div class="compare-hero" id="compareHero"></div>
 
-  <!-- ── AI OVERVIEW ───────────────────────────────────────── -->
+  <!-- ── AI OVERVIEW BANNER ──────────────────────────────────── -->
   {% if gemini_compare and gemini_compare.overview %}
-  <div style="padding: 0 5%;">
-    <div class="c-gemini-overview">
-      <span class="c-ai-label">AI Overview</span>
-      <p class="c-ai-text">{{ gemini_compare.overview }}</p>
+  <div class="c-ai-overview-banner">
+    <div class="c-ai-overview-banner-inner">
+      <div class="c-ai-overview-badge">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        AI Summary
+      </div>
+      <p class="c-ai-overview-text">{{ gemini_compare.overview }}</p>
     </div>
   </div>
   {% endif %}

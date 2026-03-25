@@ -154,6 +154,33 @@
 .topic-dropdown.open { display: block; }
 
 /* ── Section headers ── */
+/* ── Not found hint ── */
+.dd-not-found {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 18px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.dd-not-found svg { flex-shrink: 0; margin-top: 2px; opacity: 0.5; }
+
+.dd-not-found-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dd-not-found-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+
+.dd-not-found-link:hover { text-decoration: underline; }
+
 .dd-section-head {
   padding: 10px 20px 8px;
   font-size: 0.6rem;
@@ -656,7 +683,45 @@
   margin: 0;
 }
 
-/* AI Overview (above tabs) */
+/* AI Overview Banner (above tabs) */
+.c-ai-overview-banner {
+  background: linear-gradient(135deg, rgba(255,179,71,0.08) 0%, rgba(255,75,31,0.06) 100%);
+  border-top: 1px solid rgba(255,179,71,0.2);
+  border-bottom: 1px solid rgba(255,179,71,0.15);
+  padding: 28px 5%;
+  margin-bottom: 8px;
+}
+
+.c-ai-overview-banner-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.c-ai-overview-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255,179,71,0.9);
+  background: rgba(255,179,71,0.1);
+  border: 1px solid rgba(255,179,71,0.25);
+  padding: 4px 10px;
+  border-radius: 2px;
+  margin-bottom: 12px;
+}
+
+.c-ai-overview-text {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--text-2);
+  max-width: 860px;
+  margin: 0;
+}
+
+/* Legacy c-gemini-overview (kept for compat) */
 .c-gemini-overview {
   display: flex;
   gap: 14px;

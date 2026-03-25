@@ -368,8 +368,8 @@ def trends():
                         _cached_rows = topic_cache.get(topic_id) or []
                         time_windows = {}
                         for _win in [30, 60, 90]:
-                            _cutoff = (datetime.now(timezone.utc) - timedelta(days=_win)).isoformat()
-                            _rows = [r for r in _cached_rows if r.get("published_at") and str(r["published_at"]) >= _cutoff]
+                            _cutoff_date = (datetime.now(timezone.utc) - timedelta(days=_win)).strftime('%Y-%m-%d')
+                            _rows = [r for r in _cached_rows if r.get("published_at") and str(r["published_at"])[:10] >= _cutoff_date]
                             if _rows:
                                 _dfa = pd.DataFrame(_rows)
                                 _dfr = _dfa[_dfa["source_type"] == "reddit"].copy() if "source_type" in _dfa.columns else _dfa.copy()
@@ -383,9 +383,9 @@ def trends():
                                     try: return compute_all_insights(df)
                                     except: return {}
                                 time_windows[str(_win)] = {
-                                    "all":             _sc(_dfa),
-                                    "reddit":          _sc(_dfr),
-                                    "youtube":         _sc(_dfy),
+                                    "all":             _sc(_dfa, po=False),
+                                    "reddit":          _sc(_dfr, po=False),
+                                    "youtube":         _sc(_dfy, po=False),
                                     "insights_all":    _si(_dfa),
                                     "insights_reddit": _si(_dfr),
                                     "insights_youtube": _si(_dfy),
@@ -921,29 +921,8 @@ def compare():
                         if rows:
                             return pd.DataFrame(rows), _snap_to_info(t_id, topic_name)
 
-                # 3. New topic — requires login to save
-                if not current_user_id:
-                    flash(f"Please log in to analyse a new topic: '{topic_name}'")
-                    return None, None
-
-                from app.utils.fetcher import get_reddit_comments
-                from app.utils.hf_analyzer import process_and_store_comments
-
-                df = get_reddit_comments(topic_name, limit_posts=100, max_comments=500,
-                                         subreddit_name="all", topic_name=topic_name)
-                if df.empty:
-                    return None, None
-
-                process_and_store_comments(topic_name, df, current_user_id, mode="local")
-
-                res = admin_supabase.table("topics").select("id") \
-                                    .eq("name", topic_name).eq("user_id", current_user_id).execute()
-                if res.data:
-                    t_id = res.data[0]['id']
-                    rows = _fetch_all_comments(t_id)
-                    if rows:
-                        return pd.DataFrame(rows), _snap_to_info(t_id, topic_name)
-
+                # 3. Topic not found — direct user to Trends page instead of scraping fresh
+                flash(f'"{topic_name}" hasn\'t been analysed yet. Run a Custom Analysis from the Trends page first, then come back to compare.')
                 return None, None
 
             df_a, info_a = load_topic_for_compare(topic_a_name)

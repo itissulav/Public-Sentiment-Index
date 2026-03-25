@@ -88,7 +88,14 @@
 
 {% macro deep_dive_card(size, question, gemini_desc, canvas_id) %}
 <div class="chart-card {{ size }} deep-dive-card">
-  <div class="chart-question">{{ question }}</div>
+  <div class="chart-question dd-question-row">
+    <span>{{ question }}</span>
+    <select class="section-window-select dd-window-select" onchange="onDeepDiveWindowChange('{{ canvas_id }}', this.value)">
+      <option value="30">Last 30D</option>
+      <option value="60">Last 60D</option>
+      <option value="90" selected>Last 90D</option>
+    </select>
+  </div>
   <p class="chart-gemini-desc" data-canvas="{{ canvas_id }}"{% if not gemini_desc %} style="display:none"{% endif %}>{{ gemini_desc or '' }}</p>
   <div class="chart-body{% if size == 'full' or size == 'two-thirds' %} tall{% endif %}"><canvas id="{{ canvas_id }}"></canvas></div>
 </div>
@@ -98,63 +105,113 @@
 <script type="application/json" id="psi-trends-suggestions">{{ suggestions | tojson }}</script>
 
 <!-- ============================================================
-     TRENDS LANDING: split-screen search + featured topics
+     TRENDS LANDING: hero + featured grid + custom analysis
      ============================================================ -->
 <div class="trends-landing">
 
-  <!-- Left: editorial copy + search -->
-  <div class="landing-left">
-    <span class="landing-eyebrow">Public Sentiment Index</span>
-    <h1 class="landing-headline">What is the world<br>saying about <em>anything</em>?</h1>
-
-    <div class="search-container">
-      <p class="landing-section-label">Custom Topic Analysis
-        <span class="landing-section-note">Deep scan via Reddit &amp; YouTube &middot; 5–10 minutes</span>
-      </p>
-      <div class="trends-search-wrap">
-        <form method="POST" action="{{ url_for('main.trends') }}" class="topic-search-form" id="searchForm">
-          <input type="text" name="topic" id="trendsSearchInput" placeholder="Bitcoin, Taylor Swift, Gaza…" required class="search-input"
-                 autocomplete="off" value="{{ current_topic if current_topic and not is_featured else '' }}">
-          <button type="submit" class="search-btn" id="analyzeBtn">Analyze</button>
-        </form>
-        <div class="trends-search-dropdown" id="trendsSearchDropdown"></div>
-      </div>
-      <a href="{{ url_for('main.compare') }}" class="compare-link-btn">Compare Topics &rarr;</a>
-      <!-- Full-screen analysis loading overlay -->
-      <div id="loadingIndicator" style="display:none;position:fixed;inset:0;background:rgba(6,6,7,0.94);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:22px;">
-        <p id="progressText" style="color:#f5f0e8;font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:600;letter-spacing:0.03em;margin:0;text-align:center;max-width:340px;line-height:1.5;">Initializing analysis…</p>
-        <div style="width:320px;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;">
-          <div id="progressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#FF4B1F,#FFB347);border-radius:2px;transition:width 0.4s ease;"></div>
-        </div>
-        <p id="progressPercent" style="color:#5a5565;font-size:0.82rem;margin:0;">0%</p>
-      </div>
+  <!-- 1. Hero bar -->
+  <div class="tl-hero">
+    <div class="tl-hero-inner">
+      <span class="landing-eyebrow">Public Sentiment Index</span>
+      <h1 class="landing-headline">What is the world<br>saying about <em>anything</em>?</h1>
+      <p class="tl-hero-sub">Click a topic below to get an instant sentiment report — or scroll down to analyse any topic yourself.</p>
     </div>
   </div>
 
-  <!-- Right: featured topics editorial list -->
-  <div class="landing-right">
-    <p class="landing-right-label">Featured Topics &mdash; <span style="font-weight:400;opacity:0.7;">Pre-analyzed &middot; instant results</span></p>
-    {% set presets = [
-      ("Donald Trump",      "donaldtrump.png"),
-      ("The Boys",          "theboys.png"),
-      ("Avengers Doomsday", "avengersdoomsday.png"),
-      ("Macbook Neo",       "macbookneo.png"),
-      ("America vs Iran",   "americavsiran.png")
-    ] %}
-    <div class="hero-list">
+  <!-- 2. Featured topics grid -->
+  {% set presets = [
+    ("Donald Trump",      "donaldtrump.png"),
+    ("The Boys",          "theboys.png"),
+    ("Avengers Doomsday", "avengersdoomsday.png"),
+    ("Macbook Neo",       "macbookneo.png"),
+    ("America vs Iran",   "americavsiran.png")
+  ] %}
+  <div class="tl-featured-section">
+    <div class="tl-featured-header">
+      <p class="tl-featured-label">
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        Featured Topics — Click any card for an instant report
+      </p>
+      <span class="tl-instant-tag">Pre-analyzed · Instant</span>
+    </div>
+    <div class="tl-card-grid">
       {% for pt, img in presets %}
-      <form method="POST" action="{{ url_for('main.trends') }}" class="hero-list-form">
+      <form method="POST" action="{{ url_for('main.trends') }}" class="tl-card-form">
         <input type="hidden" name="topic" value="{{ pt }}">
-        <button type="submit" class="hero-list-item {{ 'active' if current_topic == pt else '' }}"
-                style="background-image: url('{{ url_for('static', filename='images/' ~ img) }}');">
-          <div class="hero-card-content">
-            <span class="hero-list-name">{{ pt }}</span>
-            <span class="hero-list-meta">Instant Report &rarr;</span>
+        <button type="submit" class="tl-topic-card {{ 'active' if current_topic == pt else '' }}">
+          <div class="tl-card-img" style="background-image: url('{{ url_for('static', filename='images/' ~ img) }}');"></div>
+          <div class="tl-card-overlay"></div>
+          <span class="tl-card-instant-badge">INSTANT</span>
+          <div class="tl-card-body">
+            <span class="tl-card-name">{{ pt }}</span>
+            <span class="tl-card-cta">View Sentiment Report &rarr;</span>
           </div>
         </button>
       </form>
       {% endfor %}
     </div>
+  </div>
+
+  <!-- 3. Divider -->
+  <div class="tl-or-divider"><span>or analyse any topic yourself</span></div>
+
+  <!-- 4. Custom analysis section -->
+  <div class="tl-custom-section">
+    <div class="tl-custom-inner">
+
+      <div class="tl-custom-copy">
+        <p class="tl-custom-heading">Analyse any topic</p>
+        <p class="tl-custom-desc">Type anything — a person, film, event, product — and we'll scan Reddit &amp; YouTube for public sentiment.</p>
+        <div class="hiw-row">
+          <div class="hiw-step">
+            <div class="hiw-icon-wrap">
+              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            </div>
+            <span class="hiw-label">Type any topic</span>
+          </div>
+          <div class="hiw-arrow">→</div>
+          <div class="hiw-step">
+            <div class="hiw-icon-wrap">
+              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </div>
+            <span class="hiw-label">We scan Reddit &amp; YouTube</span>
+          </div>
+          <div class="hiw-arrow">→</div>
+          <div class="hiw-step">
+            <div class="hiw-icon-wrap">
+              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            </div>
+            <span class="hiw-label">Get your sentiment report</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="tl-custom-form">
+        <div class="trends-search-wrap">
+          <form method="POST" action="{{ url_for('main.trends') }}" class="topic-search-form" id="searchForm">
+            <input type="text" name="topic" id="trendsSearchInput" placeholder="Bitcoin, Taylor Swift, Gaza…" required class="search-input"
+                   autocomplete="off" value="{{ current_topic if current_topic and not is_featured else '' }}">
+            <button type="submit" class="search-btn" id="analyzeBtn">Analyze</button>
+          </form>
+          <div class="trends-search-dropdown" id="trendsSearchDropdown"></div>
+        </div>
+        <div class="tl-custom-note">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span>Takes <strong>5–10 minutes</strong> to scan &amp; analyse</span>
+        </div>
+        <a href="{{ url_for('main.compare') }}" class="compare-link-btn">Compare two topics side by side &rarr;</a>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Full-screen analysis loading overlay (layout-independent, position:fixed) -->
+  <div id="loadingIndicator" style="display:none;position:fixed;inset:0;background:rgba(6,6,7,0.94);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:22px;">
+    <p id="progressText" style="color:#f5f0e8;font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:600;letter-spacing:0.03em;margin:0;text-align:center;max-width:340px;line-height:1.5;">Initializing analysis…</p>
+    <div style="width:320px;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;">
+      <div id="progressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#FF4B1F,#FFB347);border-radius:2px;transition:width 0.4s ease;"></div>
+    </div>
+    <p id="progressPercent" style="color:#5a5565;font-size:0.82rem;margin:0;">0%</p>
   </div>
 
 </div>
@@ -324,18 +381,6 @@
   </div>
 </div>
 
-<!-- ── TIME RANGE PILLS (featured topics only) ──────────────────── -->
-{% if is_featured and has_data %}
-<div class="time-range-wrap">
-  <span class="time-range-label">Time range:</span>
-  <div class="time-pills">
-    <button class="time-pill {% if selected_days == 30 %}active{% endif %}" data-days="30" onclick="switchTimeWindow(30)">30D</button>
-    <button class="time-pill {% if selected_days == 60 %}active{% endif %}" data-days="60" onclick="switchTimeWindow(60)">60D</button>
-    <button class="time-pill {% if selected_days == 90 %}active{% endif %}" data-days="90" onclick="switchTimeWindow(90)">90D</button>
-  </div>
-</div>
-{% endif %}
-
 <!-- ── PLATFORM TOGGLE ──────────────────────────────────────────── -->
 <div class="platform-toggle-wrap">
   <div class="platform-toggle">
@@ -408,7 +453,10 @@
     </div>
     {% endif %}
 
-    <div class="section-question full">How has sentiment changed over time?</div>
+    <div class="section-question full section-q-flex">
+      <span>How has sentiment changed over time?</span>
+      {% if is_featured %}<select class="section-window-select" data-section="timeline" onchange="onSectionWindowChange('timeline',this.value)"><option value="30">Last 30 days</option><option value="60">Last 60 days</option><option value="90" selected>Last 90 days</option></select>{% endif %}
+    </div>
     <div class="chart-card full">
       <div class="chart-body tall"><canvas id="all-chart2"></canvas></div>
     </div>
@@ -423,8 +471,12 @@
       <p class="gemini-momentum-desc" style="display:none;font-size:0.81rem;color:#94a3b8;padding:10px 16px 6px;line-height:1.6;margin:0;"></p>
     </div>
 
-    <div class="section-question full">What are people actually saying?</div>
-    <div class="chart-card half">
+    <div class="section-question full section-q-flex">
+      <span>What are people actually saying?</span>
+      {% if is_featured %}<select class="section-window-select" data-section="keywords" onchange="onSectionWindowChange('keywords',this.value)"><option value="30">Last 30 days</option><option value="60">Last 60 days</option><option value="90" selected>Last 90 days</option></select>{% endif %}
+    </div>
+    <div class="kw-pair-row">
+    <div class="chart-card">
       <div class="chart-header"><h3 class="chart-title">What People Love</h3><p class="chart-subtitle">Top phrases in positive comments — with a real quote</p></div>
       <div class="kw-ai-overview pos"{% if not (insights_all and insights_all.gemini_insights and insights_all.gemini_insights.keyword_love) %} style="display:none"{% endif %}>
         <span class="kw-ai-label pos">AI Overview</span>
@@ -432,7 +484,7 @@
       </div>
       <div id="all-kwPos" class="kw-list"></div>
     </div>
-    <div class="chart-card half">
+    <div class="chart-card">
       <div class="chart-header"><h3 class="chart-title">What People Criticise</h3><p class="chart-subtitle">Top phrases in negative comments — with a real quote</p></div>
       <div class="kw-ai-overview neg"{% if not (insights_all and insights_all.gemini_insights and insights_all.gemini_insights.keyword_criticise) %} style="display:none"{% endif %}>
         <span class="kw-ai-label neg">AI Overview</span>
@@ -440,14 +492,21 @@
       </div>
       <div id="all-kwNeg" class="kw-list"></div>
     </div>
+    </div><!-- /kw-pair-row -->
 
-    <div class="section-question full">What topics are being argued about?</div>
+    <div class="section-question full section-q-flex">
+      <span>What topics are being argued about?</span>
+      {% if is_featured %}<select class="section-window-select" data-section="debate" onchange="onSectionWindowChange('debate',this.value)"><option value="30">Last 30 days</option><option value="60">Last 60 days</option><option value="90" selected>Last 90 days</option></select>{% endif %}
+    </div>
     <p class="gemini-debate-summary" style="display:none;font-size:0.85rem;color:rgba(245,240,232,0.6);padding:0 0 10px;line-height:1.7;margin:0;"></p>
     <div class="chart-card full">
       <div id="all-debateCards" class="yt-sent-rows"></div>
     </div>
 
-    <div class="section-question full">What posts drove the conversation?</div>
+    <div class="section-question full section-q-flex">
+      <span>What posts drove the conversation?</span>
+      {% if is_featured %}<select class="section-window-select" data-section="top10" onchange="onSectionWindowChange('top10',this.value)"><option value="30">Last 30 days</option><option value="60">Last 60 days</option><option value="90" selected>Last 90 days</option></select>{% endif %}
+    </div>
     <p class="gemini-viral-posts" style="display:none;font-size:0.85rem;color:rgba(245,240,232,0.6);padding:0 0 10px;line-height:1.7;margin:0;"></p>
     <div class="chart-card full">
       <div id="all-top10Cards" class="top10-post-cards"></div>
@@ -558,7 +617,10 @@
       <div class="chart-body"><canvas id="reddit-chart1"></canvas></div>
     </div>
 
-    <div class="section-question full">How has sentiment changed over time?</div>
+    <div class="section-question full section-q-flex">
+      <span>How has sentiment changed over time?</span>
+      {% if is_featured %}<select class="section-window-select" data-section="timeline" onchange="onSectionWindowChange('timeline',this.value)"><option value="30">Last 30 days</option><option value="60">Last 60 days</option><option value="90" selected>Last 90 days</option></select>{% endif %}
+    </div>
     <div class="chart-card full">
       <div class="chart-body tall"><canvas id="reddit-chart2"></canvas></div>
     </div>
@@ -573,8 +635,12 @@
       <p class="gemini-momentum-desc" style="display:none;font-size:0.81rem;color:#94a3b8;padding:10px 16px 6px;line-height:1.6;margin:0;"></p>
     </div>
 
-    <div class="section-question full">What are people actually saying?</div>
-    <div class="chart-card half">
+    <div class="section-question full section-q-flex">
+      <span>What are people actually saying?</span>
+      {% if is_featured %}<select class="section-window-select" data-section="keywords" onchange="onSectionWindowChange('keywords',this.value)"><option value="30">Last 30 days</option><option value="60">Last 60 days</option><option value="90" selected>Last 90 days</option></select>{% endif %}
+    </div>
+    <div class="kw-pair-row">
+    <div class="chart-card">
       <div class="chart-header"><h3 class="chart-title">What People Love</h3><p class="chart-subtitle">Top phrases in positive Reddit comments — with a real quote</p></div>
       <div class="kw-ai-overview pos"{% if not (insights_data and insights_data.gemini_insights and insights_data.gemini_insights.keyword_love) %} style="display:none"{% endif %}>
         <span class="kw-ai-label pos">AI Overview</span>
@@ -582,7 +648,7 @@
       </div>
       <div id="reddit-kwPos" class="kw-list"></div>
     </div>
-    <div class="chart-card half">
+    <div class="chart-card">
       <div class="chart-header"><h3 class="chart-title">What People Criticise</h3><p class="chart-subtitle">Top phrases in negative Reddit comments — with a real quote</p></div>
       <div class="kw-ai-overview neg"{% if not (insights_data and insights_data.gemini_insights and insights_data.gemini_insights.keyword_criticise) %} style="display:none"{% endif %}>
         <span class="kw-ai-label neg">AI Overview</span>
@@ -590,14 +656,21 @@
       </div>
       <div id="reddit-kwNeg" class="kw-list"></div>
     </div>
+    </div><!-- /kw-pair-row -->
 
-    <div class="section-question full">What topics are being argued about?</div>
+    <div class="section-question full section-q-flex">
+      <span>What topics are being argued about?</span>
+      {% if is_featured %}<select class="section-window-select" data-section="debate" onchange="onSectionWindowChange('debate',this.value)"><option value="30">Last 30 days</option><option value="60">Last 60 days</option><option value="90" selected>Last 90 days</option></select>{% endif %}
+    </div>
     <p class="gemini-debate-summary" style="display:none;font-size:0.85rem;color:rgba(245,240,232,0.6);padding:0 0 10px;line-height:1.7;margin:0;"></p>
     <div class="chart-card full">
       <div id="reddit-debateCards" class="yt-sent-rows"></div>
     </div>
 
-    <div class="section-question full">What posts drove the conversation?</div>
+    <div class="section-question full section-q-flex">
+      <span>What posts drove the conversation?</span>
+      {% if is_featured %}<select class="section-window-select" data-section="top10" onchange="onSectionWindowChange('top10',this.value)"><option value="30">Last 30 days</option><option value="60">Last 60 days</option><option value="90" selected>Last 90 days</option></select>{% endif %}
+    </div>
     <p class="gemini-viral-posts" style="display:none;font-size:0.85rem;color:rgba(245,240,232,0.6);padding:0 0 10px;line-height:1.7;margin:0;"></p>
     <div class="chart-card full">
       <div id="reddit-top10Cards" class="top10-post-cards"></div>
@@ -755,7 +828,10 @@
       <div class="chart-body"><canvas id="yt-chart1"></canvas></div>
     </div>
 
-    <div class="section-question full">How has sentiment changed over time?</div>
+    <div class="section-question full section-q-flex">
+      <span>How has sentiment changed over time?</span>
+      {% if is_featured %}<select class="section-window-select" data-section="timeline" onchange="onSectionWindowChange('timeline',this.value)"><option value="30">Last 30 days</option><option value="60">Last 60 days</option><option value="90" selected>Last 90 days</option></select>{% endif %}
+    </div>
     <div class="chart-card full">
       <div class="chart-body tall"><canvas id="yt-chart2"></canvas></div>
     </div>
@@ -770,9 +846,13 @@
       <p class="gemini-momentum-desc" style="display:none;font-size:0.81rem;color:#94a3b8;padding:10px 16px 6px;line-height:1.6;margin:0;"></p>
     </div>
 
-    <div class="section-question full">What are YouTube viewers actually saying?</div>
+    <div class="section-question full section-q-flex">
+      <span>What are YouTube viewers actually saying?</span>
+      {% if is_featured %}<select class="section-window-select" data-section="keywords" onchange="onSectionWindowChange('keywords',this.value)"><option value="30">Last 30 days</option><option value="60">Last 60 days</option><option value="90" selected>Last 90 days</option></select>{% endif %}
+    </div>
     {% if insights_youtube and insights_youtube.keyword_split %}
-    <div class="chart-card half">
+    <div class="kw-pair-row">
+    <div class="chart-card">
       <div class="chart-header"><h3 class="chart-title">What They Love</h3><p class="chart-subtitle">Top phrases in positive YouTube comments</p></div>
       <div class="kw-ai-overview pos"{% if not (insights_youtube and insights_youtube.gemini_insights and insights_youtube.gemini_insights.keyword_love) %} style="display:none"{% endif %}>
         <span class="kw-ai-label pos">AI Overview</span>
@@ -780,7 +860,7 @@
       </div>
       <div id="yt-kwPos" class="kw-list"></div>
     </div>
-    <div class="chart-card half">
+    <div class="chart-card">
       <div class="chart-header"><h3 class="chart-title">What They Criticise</h3><p class="chart-subtitle">Top phrases in negative YouTube comments</p></div>
       <div class="kw-ai-overview neg"{% if not (insights_youtube and insights_youtube.gemini_insights and insights_youtube.gemini_insights.keyword_criticise) %} style="display:none"{% endif %}>
         <span class="kw-ai-label neg">AI Overview</span>
@@ -788,9 +868,13 @@
       </div>
       <div id="yt-kwNeg" class="kw-list"></div>
     </div>
+    </div><!-- /kw-pair-row -->
     {% endif %}
 
-    <div class="section-question full">What videos are being debated?</div>
+    <div class="section-question full section-q-flex">
+      <span>What videos are being debated?</span>
+      {% if is_featured %}<select class="section-window-select" data-section="debate" onchange="onSectionWindowChange('debate',this.value)"><option value="30">Last 30 days</option><option value="60">Last 60 days</option><option value="90" selected>Last 90 days</option></select>{% endif %}
+    </div>
     <p class="gemini-debate-summary" style="display:none;font-size:0.85rem;color:rgba(245,240,232,0.6);padding:0 0 10px;line-height:1.7;margin:0;"></p>
     <div class="chart-card full">
       <div id="yt-debateCards" class="yt-sent-rows"></div>
@@ -1298,7 +1382,7 @@ function renderYtKwCards(kwData, containerId, accentColor, borderColor) {
 function renderDebateCards(containerId, labels, posArr, negArr, neuArr, keywords, totals) {
   const el = document.getElementById(containerId);
   if (!el || !labels?.length) return;
-  el.innerHTML = labels.map((title, i) => {
+  el.innerHTML = labels.slice(0, 5).map((title, i) => {
     const pos   = Math.round(posArr ? (posArr[i] || 0) : 0);
     const neg   = Math.round(negArr ? (negArr[i] || 0) : 0);
     const neu   = Math.round(neuArr ? (neuArr[i] || 0) : 0);
@@ -1375,11 +1459,15 @@ function renderSentimentRowsWithThumbs(containerId, labels, posArr, negArr, neuA
 
 function renderTop10Cards(containerId, chart5Data) {
   const el = document.getElementById(containerId);
-  if (!el || !chart5Data?.posts?.length) return;
+  if (!el) return;
+  if (!chart5Data?.posts?.length) {
+    el.innerHTML = '<p class="section-no-data">No posts found in this time period.</p>';
+    return;
+  }
   const SENT_COLOR  = { Positive:'#10b981', Negative:'#ef4444', Neutral:'#6b7280' };
   const SENT_BG     = { Positive:'rgba(16,185,129,0.12)', Negative:'rgba(239,68,68,0.12)', Neutral:'rgba(100,116,139,0.12)' };
   const SENT_BORDER = { Positive:'rgba(16,185,129,0.3)',  Negative:'rgba(239,68,68,0.3)',  Neutral:'rgba(100,116,139,0.3)'  };
-  el.innerHTML = chart5Data.posts.map((post, idx) => {
+  el.innerHTML = chart5Data.posts.slice(0, 5).map((post, idx) => {
     const sent = post.sentiment || 'Neutral';
     const col  = SENT_COLOR[sent] || '#6b7280';
     const bg   = SENT_BG[sent]    || 'rgba(100,116,139,0.12)';
@@ -1807,8 +1895,7 @@ function _destroyChart(canvasId) {
   if (existing) existing.destroy();
 }
 
-// ── Instant time-window switching (30D / 60D / 90D) ──────────
-let _activeTimeWindow = {{ selected_days | default(90) }};
+// ── Per-section time window state ─────────────────────────────
 const _timeWindowData = (function () {
   try {
     const el = document.getElementById('psi-time-windows');
@@ -1816,45 +1903,104 @@ const _timeWindowData = (function () {
   } catch (e) { return null; }
 })();
 
-function switchTimeWindow(days) {
-  if (!_timeWindowData || !_timeWindowData[String(days)]) return;
-  if (days === _activeTimeWindow) return;
-  _activeTimeWindow = days;
+const _sectionWindows = { timeline: 90, keywords: 90, debate: 90, top10: 90 };
 
-  // Update pill active state
-  document.querySelectorAll('.time-pill').forEach(function (p) {
-    p.classList.toggle('active', parseInt(p.dataset.days) === days);
-  });
-
-  const d = _timeWindowData[String(days)];
-  chartsAllRaw     = d.all             || {};
-  chartsRedditRaw  = d.reddit          || {};
-  chartsYoutubeRaw = d.youtube         || {};
-  insightsAll      = d.insights_all    || {};
-  insightsReddit   = d.insights_reddit || {};
-  insightsYoutube  = d.insights_youtube || {};
-
-  // Reset rendered flags so panels are re-initialized with new data
-  _panelRendered = { all: false, reddit: false, youtube: false, compare: false };
-
-  // Re-render the currently active panel
-  const activeBtn = document.querySelector('.ptoggle-btn.active');
-  if (activeBtn) {
-    const match = activeBtn.getAttribute('onclick')?.match(/'(\w+)'/);
-    const activeName = match ? match[1] : 'all';
-    switchPlatform(activeName, activeBtn);
+function _getWindowData(platform, days) {
+  const key = String(days);
+  if (_timeWindowData?.[key]) {
+    const wd = _timeWindowData[key];
+    if (platform === 'reddit')  return { db: wd.reddit  || {}, ins: wd.insights_reddit  || {} };
+    if (platform === 'youtube') return { db: wd.youtube || {}, ins: wd.insights_youtube || {} };
+    return { db: wd.all || {}, ins: wd.insights_all || {} };
   }
+  if (platform === 'reddit')  return { db: chartsRedditRaw,  ins: insightsReddit  };
+  if (platform === 'youtube') return { db: chartsYoutubeRaw, ins: insightsYoutube };
+  return { db: chartsAllRaw, ins: insightsAll };
+}
+
+function _getActivePlatform() {
+  const btn = document.querySelector('.ptoggle-btn.active');
+  const m = btn?.getAttribute('onclick')?.match(/'(\w+)'/);
+  return m ? m[1] : 'all';
+}
+
+function _platformPrefix(platform) {
+  return platform === 'youtube' ? 'yt' : platform;
+}
+
+function onSectionWindowChange(section, days) {
+  _sectionWindows[section] = parseInt(days);
+  const platform = _getActivePlatform();
+  const p = _platformPrefix(platform);
+  const { db, ins } = _getWindowData(platform, parseInt(days));
+
+  if (section === 'timeline') {
+    renderTimeline(p + '-chart2', db.chart2_sentiment_timeline);
+    renderMomentumChart(p + '-momentum', p + '-momentum-badge', ins?.sentiment_momentum);
+  } else if (section === 'keywords') {
+    if (platform === 'youtube') {
+      renderYtKwCards(ins.keyword_split?.positive, p + '-kwPos', '#10b981', '#065f46');
+      renderYtKwCards(ins.keyword_split?.negative, p + '-kwNeg', '#ef4444', '#7f1d1d');
+    } else {
+      renderKwCards(ins.keyword_split?.positive, p + '-kwPos', '#10b981', '#065f46');
+      renderKwCards(ins.keyword_split?.negative, p + '-kwNeg', '#ef4444', '#7f1d1d');
+    }
+    const posEl = document.getElementById(p + '-kwPos');
+    const negEl = document.getElementById(p + '-kwNeg');
+    if (posEl && !posEl.children.length) posEl.innerHTML = '<p class="section-no-data">No positive keywords in this period.</p>';
+    if (negEl && !negEl.children.length) negEl.innerHTML = '<p class="section-no-data">No negative keywords in this period.</p>';
+  } else if (section === 'debate') {
+    const el = document.getElementById(p + '-debateCards');
+    const d = ins.post_title_debate;
+    if (el) {
+      if (d?.labels?.length) {
+        renderDebateCards(p + '-debateCards', d.labels, d.datasets?.Positive||[], d.datasets?.Negative||[], d.datasets?.Neutral||[], d.keywords, d.totals||[]);
+      } else {
+        el.innerHTML = '<p class="section-no-data">No discussion topics found in this time period.</p>';
+      }
+    }
+  } else if (section === 'top10') {
+    const el = document.getElementById(p + '-top10Cards');
+    if (el) {
+      if (db.chart5_top_10_posts?.posts?.length) {
+        renderTop10Cards(p + '-top10Cards', db.chart5_top_10_posts);
+      } else {
+        el.innerHTML = '<p class="section-no-data">No posts found in this time period.</p>';
+      }
+    }
+  }
+}
+
+// ── Advanced analytics per-chart window switching ────────────
+const _deepDiveRenderers = {
+  chart3:  renderChart3,
+  chart4:  renderChart4,
+  chart6:  renderChart6,
+  chart7:  renderChart7,
+  chart8:  renderChart8,
+  chart10: renderChart10,
+  chart12: renderChart12,
+  chart13: renderChart13,
+  chart14: renderChart14,
+  chart15: renderChart15,
+  chart17: renderChart17,
+};
+
+function onDeepDiveWindowChange(canvasId, days) {
+  const platform = _getActivePlatform();
+  const { db } = _getWindowData(platform, parseInt(days));
+  _destroyChart(canvasId);
+  const chartKey = canvasId.replace(/^(all|reddit|yt)-/, '');
+  const renderer = _deepDiveRenderers[chartKey];
+  if (renderer) renderer(canvasId, db);
 }
 
 // ── Platform panel init ───────────────────────────────────────
 
 function initAllCharts() {
   if (!chartsAllRaw || !Object.keys(chartsAllRaw).length) return;
-  const db = chartsAllRaw;
 
-  renderDonut('all-chart1', db.chart1_overall_sentiment);
-  renderTimeline('all-chart2', db.chart2_sentiment_timeline);
-  renderMomentumChart('all-momentum', 'all-momentum-badge', insightsAll?.sentiment_momentum);
+  renderDonut('all-chart1', chartsAllRaw.chart1_overall_sentiment);
 
   // Platform comparison (only when YouTube exists)
   if (hasYoutube && insightsReddit?.takeaways && insightsYoutube?.takeaways) {
@@ -1872,56 +2018,86 @@ function initAllCharts() {
     });
   }
 
-  const ins = insightsAll || {};
-  renderKwCards(ins.keyword_split?.positive, 'all-kwPos', '#10b981', '#065f46');
-  renderKwCards(ins.keyword_split?.negative, 'all-kwNeg', '#ef4444', '#7f1d1d');
+  const { db: dbTL, ins: insTL } = _getWindowData('all', _sectionWindows.timeline);
+  renderTimeline('all-chart2', dbTL.chart2_sentiment_timeline);
+  renderMomentumChart('all-momentum', 'all-momentum-badge', insTL?.sentiment_momentum);
 
-  if (ins.post_title_debate?.labels?.length) {
-    const d = ins.post_title_debate;
-    renderDebateCards('all-debateCards', d.labels, d.datasets?.Positive||[], d.datasets?.Negative||[], d.datasets?.Neutral||[], d.keywords, d.totals||[]);
+  const { ins: insKw } = _getWindowData('all', _sectionWindows.keywords);
+  renderKwCards(insKw.keyword_split?.positive, 'all-kwPos', '#10b981', '#065f46');
+  renderKwCards(insKw.keyword_split?.negative, 'all-kwNeg', '#ef4444', '#7f1d1d');
+
+  const { ins: insDebate } = _getWindowData('all', _sectionWindows.debate);
+  const deb = insDebate.post_title_debate;
+  const debEl = document.getElementById('all-debateCards');
+  if (deb?.labels?.length) {
+    renderDebateCards('all-debateCards', deb.labels, deb.datasets?.Positive||[], deb.datasets?.Negative||[], deb.datasets?.Neutral||[], deb.keywords, deb.totals||[]);
+  } else if (debEl && !debEl.children.length) {
+    debEl.innerHTML = '<p class="section-no-data">No discussion topics found.</p>';
   }
 
-  renderTop10Cards('all-top10Cards', db.chart5_top_10_posts);
+  const { db: dbT10 } = _getWindowData('all', _sectionWindows.top10);
+  const t10El = document.getElementById('all-top10Cards');
+  if (dbT10.chart5_top_10_posts?.posts?.length) {
+    renderTop10Cards('all-top10Cards', dbT10.chart5_top_10_posts);
+  } else if (t10El && !t10El.children.length) {
+    t10El.innerHTML = '<p class="section-no-data">No posts found.</p>';
+  }
 }
 
 function initRedditCharts() {
   if (!chartsRedditRaw || !Object.keys(chartsRedditRaw).length) return;
-  const db = chartsRedditRaw;
 
-  renderDonut('reddit-chart1', db.chart1_overall_sentiment);
-  renderTimeline('reddit-chart2', db.chart2_sentiment_timeline);
-  renderMomentumChart('reddit-momentum', 'reddit-momentum-badge', insightsReddit?.sentiment_momentum);
+  renderDonut('reddit-chart1', chartsRedditRaw.chart1_overall_sentiment);
 
-  const ins = insightsReddit || {};
-  renderKwCards(ins.keyword_split?.positive, 'reddit-kwPos', '#10b981', '#065f46');
-  renderKwCards(ins.keyword_split?.negative, 'reddit-kwNeg', '#ef4444', '#7f1d1d');
+  const { db: dbTL, ins: insTL } = _getWindowData('reddit', _sectionWindows.timeline);
+  renderTimeline('reddit-chart2', dbTL.chart2_sentiment_timeline);
+  renderMomentumChart('reddit-momentum', 'reddit-momentum-badge', insTL?.sentiment_momentum);
 
-  if (ins.post_title_debate?.labels?.length) {
-    const d = ins.post_title_debate;
-    renderDebateCards('reddit-debateCards', d.labels, d.datasets?.Positive||[], d.datasets?.Negative||[], d.datasets?.Neutral||[], d.keywords, d.totals||[]);
+  const { ins: insKw } = _getWindowData('reddit', _sectionWindows.keywords);
+  renderKwCards(insKw.keyword_split?.positive, 'reddit-kwPos', '#10b981', '#065f46');
+  renderKwCards(insKw.keyword_split?.negative, 'reddit-kwNeg', '#ef4444', '#7f1d1d');
+
+  const { ins: insDebate } = _getWindowData('reddit', _sectionWindows.debate);
+  const deb = insDebate.post_title_debate;
+  const debEl = document.getElementById('reddit-debateCards');
+  if (deb?.labels?.length) {
+    renderDebateCards('reddit-debateCards', deb.labels, deb.datasets?.Positive||[], deb.datasets?.Negative||[], deb.datasets?.Neutral||[], deb.keywords, deb.totals||[]);
+  } else if (debEl && !debEl.children.length) {
+    debEl.innerHTML = '<p class="section-no-data">No discussion topics found.</p>';
   }
 
-  renderTop10Cards('reddit-top10Cards', db.chart5_top_10_posts);
+  const { db: dbT10 } = _getWindowData('reddit', _sectionWindows.top10);
+  const t10El = document.getElementById('reddit-top10Cards');
+  if (dbT10.chart5_top_10_posts?.posts?.length) {
+    renderTop10Cards('reddit-top10Cards', dbT10.chart5_top_10_posts);
+  } else if (t10El && !t10El.children.length) {
+    t10El.innerHTML = '<p class="section-no-data">No posts found.</p>';
+  }
 }
 
 function initYouTubeCharts() {
   if (!chartsYoutubeRaw || !Object.keys(chartsYoutubeRaw).length) return;
-  const db = chartsYoutubeRaw;
 
-  renderDonut('yt-chart1', db.chart1_overall_sentiment);
-  renderTimeline('yt-chart2', db.chart2_sentiment_timeline);
-  renderMomentumChart('yt-momentum', 'yt-momentum-badge', insightsYoutube?.sentiment_momentum);
+  renderDonut('yt-chart1', chartsYoutubeRaw.chart1_overall_sentiment);
 
-  const ins = insightsYoutube || {};
-  renderYtKwCards(ins.keyword_split?.positive, 'yt-kwPos', '#10b981', '#065f46');
-  renderYtKwCards(ins.keyword_split?.negative, 'yt-kwNeg', '#ef4444', '#7f1d1d');
+  const { db: dbTL, ins: insTL } = _getWindowData('youtube', _sectionWindows.timeline);
+  renderTimeline('yt-chart2', dbTL.chart2_sentiment_timeline);
+  renderMomentumChart('yt-momentum', 'yt-momentum-badge', insTL?.sentiment_momentum);
 
-  if (ins.post_title_debate?.labels?.length) {
-    const d = ins.post_title_debate;
-    renderDebateCards('yt-debateCards', d.labels, d.datasets?.Positive||[], d.datasets?.Negative||[], d.datasets?.Neutral||[], d.keywords, d.totals||[]);
+  const { ins: insKw } = _getWindowData('youtube', _sectionWindows.keywords);
+  renderYtKwCards(insKw.keyword_split?.positive, 'yt-kwPos', '#10b981', '#065f46');
+  renderYtKwCards(insKw.keyword_split?.negative, 'yt-kwNeg', '#ef4444', '#7f1d1d');
+
+  const { ins: insDebate } = _getWindowData('youtube', _sectionWindows.debate);
+  const deb = insDebate.post_title_debate;
+  const debEl = document.getElementById('yt-debateCards');
+  if (deb?.labels?.length) {
+    renderDebateCards('yt-debateCards', deb.labels, deb.datasets?.Positive||[], deb.datasets?.Negative||[], deb.datasets?.Neutral||[], deb.keywords, deb.totals||[]);
+  } else if (debEl && !debEl.children.length) {
+    debEl.innerHTML = '<p class="section-no-data">No discussion topics found.</p>';
   }
 
-  const cb = db.chart17_community_breakdown;
+  const cb = chartsYoutubeRaw.chart17_community_breakdown;
   if (cb?.labels?.length) {
     renderSentimentRowsWithThumbs('yt-sentByVideoCards', cb.labels,
       cb.datasets?.Positive||[], cb.datasets?.Negative||[], cb.datasets?.Neutral||[],
@@ -2165,6 +2341,11 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     }
   })();
+
+  // Clear activeScan when analysis results are shown (pill should not reappear)
+  {% if has_data and current_topic and job_status != 'processing' %}
+  sessionStorage.removeItem('activeScan');
+  {% endif %}
 
   // Progress polling on search form submit
   const PREDEFINED_TOPIC_NAMES = ['Donald Trump', 'The Boys', 'Avengers Doomsday', 'Macbook Neo', 'America vs Iran'];

@@ -10,7 +10,11 @@
 <div class="pulse-hero">
   <div class="pulse-hero-inner">
     <span class="pulse-eyebrow">Live Tracking</span>
-    <h1 class="pulse-title">Sentiment Pulse</h1>
+    <h1 class="pulse-title">Sentiment Pulse
+      <span class="pulse-info-tip" title="PSI (Public Sentiment Index): a score from −100 to +100 measuring how positively or negatively the public feels about a topic.">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      </span>
+    </h1>
     <p class="pulse-sub">PSI ratings across all tracked topics — last 90 days</p>
     <div class="pulse-period-row">
       <button class="pulse-period-btn active" data-days="30">30D</button>
@@ -18,6 +22,41 @@
       <button class="pulse-period-btn" data-days="90">90D</button>
     </div>
     <p id="dataRangeNote" style="display:none;font-size:0.78rem;color:var(--text-2);margin-top:8px;opacity:0.75;"></p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     EXPLAINER STRIP — what each section shows
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="pulse-explainer-strip">
+  <div class="pex-item">
+    <div class="pex-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+    </div>
+    <div class="pex-text">
+      <span class="pex-title">Market Movers</span>
+      <span class="pex-desc">Which topics shifted most this period</span>
+    </div>
+  </div>
+  <div class="pex-divider"></div>
+  <div class="pex-item">
+    <div class="pex-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    </div>
+    <div class="pex-text">
+      <span class="pex-title">Sentiment Over Time</span>
+      <span class="pex-desc">PSI score −100 (hate) → +100 (love)</span>
+    </div>
+  </div>
+  <div class="pex-divider"></div>
+  <div class="pex-item">
+    <div class="pex-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+    </div>
+    <div class="pex-text">
+      <span class="pex-title">Emotion Heatmap</span>
+      <span class="pex-desc">Day-by-day emotional tone per topic</span>
+    </div>
   </div>
 </div>
 
@@ -61,8 +100,18 @@
      ═══════════════════════════════════════════════════════════════ -->
 <div class="pulse-heatmap-section">
   <div class="pulse-heatmap-header">
-    <span class="pulse-chart-label">Dominant Emotion</span>
-    <span class="pulse-chart-sub">Each cell = one day. <span class="hm-legend-pos">■</span> Positive · <span class="hm-legend-neg">■</span> Negative · <span class="hm-legend-neu">■</span> Neutral</span>
+    <div class="pulse-heatmap-title-row">
+      <span class="pulse-chart-label">Emotion Heatmap</span>
+      <span class="pulse-chart-sub">Each row = a topic. Each cell = one day. Color = dominant emotion.</span>
+    </div>
+    <div class="hm-legend-row">
+      <span class="hm-legend-swatch" style="background:rgba(16,185,129,0.55)"></span><span class="hm-legend-txt">Positive</span>
+      <span class="hm-legend-swatch" style="background:rgba(239,68,68,0.55)"></span><span class="hm-legend-txt">Negative</span>
+      <span class="hm-legend-swatch" style="background:rgba(245,158,11,0.55)"></span><span class="hm-legend-txt">Optimism</span>
+      <span class="hm-legend-swatch" style="background:rgba(59,130,246,0.55)"></span><span class="hm-legend-txt">Sadness</span>
+      <span class="hm-legend-swatch" style="background:rgba(168,85,247,0.55)"></span><span class="hm-legend-txt">Fear</span>
+      <span class="hm-legend-swatch" style="background:rgba(100,116,139,0.35)"></span><span class="hm-legend-txt">Neutral</span>
+    </div>
   </div>
   <div id="pulseHeatmap" class="pulse-heatmap"></div>
 </div>
@@ -197,13 +246,18 @@ function buildMovers(days) {
   const top = movers.slice(0, 3);
 
   el.innerHTML = top.map(m => {
-    const arrow = m.direction === 'up' ? '↑' : m.direction === 'down' ? '↓' : '—';
-    const label = m.direction === 'up' ? 'Rising' : m.direction === 'down' ? 'Falling' : 'Stable';
+    const arrow  = m.direction === 'up' ? '↑' : m.direction === 'down' ? '↓' : '—';
+    const label  = m.direction === 'up' ? 'Public opinion improved' : m.direction === 'down' ? 'Public opinion declined' : 'Opinion stable';
+    const deltaStr = (m.direction === 'up' ? '+' : m.direction === 'down' ? '-' : '') + Math.abs(m.delta) + ' pts this period';
+    // PSI bar: map -100..+100 to 0..100%
+    const psiPct = Math.round(((m.latest_psi + 100) / 200) * 100);
+    const barColor = m.latest_psi > 0 ? 'rgba(16,185,129,0.7)' : 'rgba(239,68,68,0.7)';
     return `
       <div class="mover-card mover-${m.direction}">
         <div class="mover-name">${m.name}</div>
         <div class="mover-psi">${m.latest_psi}</div>
-        <div class="mover-delta">${arrow} ${Math.abs(m.delta)} pts over ${days}d</div>
+        <div class="mover-psi-bar-wrap"><div class="mover-psi-bar" style="width:${psiPct}%;background:${barColor}"></div></div>
+        <div class="mover-delta">${arrow} ${deltaStr}</div>
         <div class="mover-label">${label}</div>
       </div>`;
   }).join('');

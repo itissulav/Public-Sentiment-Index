@@ -31,7 +31,22 @@
     }
 
     function renderDropdown(items) {
-      if (!items.length) { dropdown.classList.remove('open'); return; }
+      const q = input.value.trim();
+      if (!items.length) {
+        if (q) {
+          dropdown.innerHTML = `<div class="dd-not-found">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <div class="dd-not-found-text">
+              <span>"${q}" hasn't been analysed yet.</span>
+              <a href="/trends" class="dd-not-found-link">Analyse it on the Trends page first →</a>
+            </div>
+          </div>`;
+          dropdown.classList.add('open');
+        } else {
+          dropdown.classList.remove('open');
+        }
+        return;
+      }
 
       const featured = items.filter(s => s.kind === 'featured');
       const saved    = items.filter(s => s.kind !== 'featured');
@@ -123,34 +138,10 @@
       form.addEventListener('submit', function () {
         const btn    = document.getElementById('compareBtn');
         const loader = document.getElementById('compareLoader');
-        const bar    = document.getElementById('loaderBar');
-        const pct    = document.getElementById('loaderPct');
-        const txt    = document.getElementById('loaderText');
         if (btn && loader) {
-          btn.disabled  = true;
+          btn.disabled    = true;
           btn.textContent = 'Comparing…';
-          loader.style.display = 'block';
-          let p = 0;
-          const iv = setInterval(async () => {
-            try {
-              const res  = await fetch('/api/fetch_progress');
-              const data = await res.json();
-              if (data.status === 'fetching' && data.total > 0) {
-                p = Math.floor((data.current / data.total) * 85);
-                txt.innerHTML = `<span class="c-spinner"></span> ${data.message} (${data.current}/${data.total})`;
-              } else if (data.status === 'analyzing') {
-                p = 90;
-                txt.innerHTML = `<span class="c-spinner"></span> ${data.message}`;
-              } else if (data.status === 'complete') {
-                p = 100;
-                clearInterval(iv);
-              } else {
-                p = Math.min(p + 2, 88);
-              }
-            } catch (_) { p = Math.min(p + 1, 88); }
-            bar.style.width = p + '%';
-            pct.textContent = p + '%';
-          }, 500);
+          loader.style.display = 'flex';
         }
       });
     }
