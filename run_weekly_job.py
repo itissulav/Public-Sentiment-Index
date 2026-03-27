@@ -199,6 +199,13 @@ def run_topic(topic_name: str):
 
     print(f"[youtube] Total YouTube comments stored for '{topic_name}': {yt_collected}")
 
+    # Re-compute and store pre-computed charts after data refresh
+    try:
+        from app.utils.chart_cache import precompute_and_store
+        precompute_and_store(topic_id, topic_name=topic_name)
+    except Exception as e:
+        print(f"[weekly] Chart pre-compute failed for '{topic_name}' (non-fatal): {e}")
+
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 

@@ -6,10 +6,11 @@ Fetches YouTube video metadata and comments using the YouTube Data API v3.
 Quota cost (free tier: 10,000 units/day):
   search.list         = 100 units per call
   videos.list         =   1 unit per call
+  channels.list       =   1 unit per call
   commentThreads.list =   1 unit per page (100 comments/page)
 
-Per-topic budget: 3 queries × 100 (search) + 1 (videos.list) + ~2 pages × 9 videos = ~327 units.
-Fits ~30 full topic scans per day on the free tier.
+Per-topic budget: 5 queries × 102 (search+videos+channels) + ~2 pages × 9 videos = ~528 units.
+Fits ~18 full topic scans per day on the free tier.
 """
 
 import os
@@ -26,14 +27,18 @@ def _build_client(api_key: str):
     return build("youtube", "v3", developerKey=api_key, cache_discovery=False)
 
 
-def search_videos(query: str, api_key: str, max_results: int = 3, days_back: int = 90) -> list:
+def search_videos(query: str, api_key: str, max_results: int = 5, days_back: int = 90) -> list:
     """
-    Search YouTube for videos matching `query`.
+    Search YouTube for informative/opinionated videos matching `query`.
 
-    Returns list of dicts: video_id, title, channel, view_count, like_count, comment_count, published_at
-    Returns [] on any error.
+    Filters applied:
+    - No Shorts (videoDuration=medium excludes < 4 min)
+    - No live streams (liveStreamingDetails presence check)
+    - Channels with 100k+ subscribers only
+    - Published within `days_back` days (default 90)
 
-    Quota cost: 100 units (search.list) + 1 unit (videos.list) = 101 units per call.
+    Returns list of dicts sorted by views then comment count (highest first).
+    Quota cost: 100 (search.list) + 1 (videos.list) + 1 (channels.list) = 102 units per call.
     """
     try:
         from googleapiclient.errors import HttpError
@@ -50,7 +55,7 @@ def search_videos(query: str, api_key: str, max_results: int = 3, days_back: int
             relevanceLanguage="en",
             safeSearch="none",
             publishedAfter=published_after,
-            videoDuration="medium",  # excludes Shorts (< 4 min) and very long videos
+            videoDuration="medium",  # excludes Shorts (< 4 min)
         ).execute()
 
         video_ids = [
@@ -62,25 +67,64 @@ def search_videos(query: str, api_key: str, max_results: int = 3, days_back: int
         if not video_ids:
             return []
 
+        # Fetch stats + live stream info (liveStreamingDetails) + channel ID
         stats_response = youtube.videos().list(
-            part="snippet,statistics",
+            part="snippet,statistics,liveStreamingDetails",
             id=",".join(video_ids),
         ).execute()
 
-        results = []
+        # Filter out live streams and collect channel IDs
+        filtered_items = []
+        channel_ids = []
         for item in stats_response.get("items", []):
+            # Skip live streams (ongoing or completed broadcasts)
+            if item.get("liveStreamingDetails"):
+                continue
+            # Skip if title contains #shorts indicator
+            title = item.get("snippet", {}).get("title", "").lower()
+            if "#shorts" in title or " shorts" in title:
+                continue
+            filtered_items.append(item)
+            channel_ids.append(item["snippet"]["channelId"])
+
+        if not filtered_items:
+            return []
+
+        # Fetch subscriber counts for all channels in one call
+        unique_channel_ids = list(dict.fromkeys(channel_ids))
+        channel_subs = {}
+        try:
+            ch_response = youtube.channels().list(
+                part="statistics",
+                id=",".join(unique_channel_ids),
+            ).execute()
+            for ch in ch_response.get("items", []):
+                channel_subs[ch["id"]] = int(ch.get("statistics", {}).get("subscriberCount", 0))
+        except Exception as e:
+            print(f"[youtube] Could not fetch channel stats: {e}")
+
+        results = []
+        for item in filtered_items:
+            channel_id  = item["snippet"]["channelId"]
+            sub_count   = channel_subs.get(channel_id, 0)
+            # Skip channels with fewer than 100k subscribers
+            if channel_subs and sub_count < 100_000:
+                continue
             stats   = item.get("statistics", {})
             snippet = item.get("snippet", {})
             results.append({
-                "video_id":      item["id"],
-                "title":         snippet.get("title", ""),
-                "channel":       snippet.get("channelTitle", ""),
-                "view_count":    int(stats.get("viewCount", 0)),
-                "like_count":    int(stats.get("likeCount", 0)),
-                "comment_count": int(stats.get("commentCount", 0)),
-                "published_at":  snippet.get("publishedAt", ""),
+                "video_id":         item["id"],
+                "title":            snippet.get("title", ""),
+                "channel":          snippet.get("channelTitle", ""),
+                "subscriber_count": sub_count,
+                "view_count":       int(stats.get("viewCount", 0)),
+                "like_count":       int(stats.get("likeCount", 0)),
+                "comment_count":    int(stats.get("commentCount", 0)),
+                "published_at":     snippet.get("publishedAt", ""),
             })
 
+        # Sort by views first, then comment count as tiebreaker
+        results.sort(key=lambda v: (v["view_count"], v["comment_count"]), reverse=True)
         return results
 
     except Exception as e:

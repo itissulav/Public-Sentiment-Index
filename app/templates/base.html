@@ -82,11 +82,15 @@
           <span class="item-label">History</span>
         </a>
 
-        <a href="{{ url_for('main.notifications') }}"
-           class="sidebar-item {% if request.endpoint == 'main.notifications' %}active{% endif %}">
-          <span class="item-icon"><i data-lucide="bell"></i></span>
+        <button id="notifBellBtn"
+           class="sidebar-item sidebar-bell"
+           aria-label="Open notifications">
+          <span class="item-icon" style="position:relative">
+            <i data-lucide="bell"></i>
+            <span class="notif-bell-badge"></span>
+          </span>
           <span class="item-label">Notifications</span>
-        </a>
+        </button>
         {% endif %}
         {% endif %}
 
@@ -146,6 +150,20 @@
         onclick="document.getElementById('scanPillTopic').value=sessionStorage.getItem('activeScan')||'';document.getElementById('scanPillForm').submit()">View →</button>
     </div>
 
+    <!-- ── Notification side panel ────────────────────────── -->
+    <div id="notifPanelBackdrop" class="notif-panel-backdrop"></div>
+    <aside id="notifPanel" class="notif-panel" aria-label="Notifications">
+      <div class="notif-panel-header">
+        <span class="notif-panel-title">Notifications</span>
+        <button id="notifPanelClose" class="notif-panel-close" aria-label="Close notifications">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div id="notifPanelBody" class="notif-panel-body">
+        <div class="notif-panel-loading">Loading…</div>
+      </div>
+    </aside>
+
     <!-- Lucide icons runtime -->
     <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
     <script>
@@ -195,6 +213,139 @@
             }
           } catch (e) {}
         }, 10000);
+      })();
+
+      // ── Notification side panel ──────────────────────────────
+      (function () {
+        const bellBtn   = document.getElementById('notifBellBtn');
+        const panel     = document.getElementById('notifPanel');
+        const backdrop  = document.getElementById('notifPanelBackdrop');
+        const closeBtn  = document.getElementById('notifPanelClose');
+        const body      = document.getElementById('notifPanelBody');
+        if (!bellBtn || !panel) return;
+
+        let loaded = false;
+
+        function openPanel() {
+          panel.classList.add('open');
+          backdrop.classList.add('open');
+          document.body.style.overflow = 'hidden';
+          if (!loaded) { loaded = true; loadNotifs(); }
+        }
+
+        function closePanel() {
+          panel.classList.remove('open');
+          backdrop.classList.remove('open');
+          document.body.style.overflow = '';
+        }
+
+        bellBtn.addEventListener('click', openPanel);
+        closeBtn.addEventListener('click', closePanel);
+        backdrop.addEventListener('click', closePanel);
+        document.addEventListener('keydown', function(e) {
+          if (e.key === 'Escape') closePanel();
+        });
+
+        function upSvg() {
+          return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>';
+        }
+        function downSvg() {
+          return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+        }
+        function checkSvg() {
+          return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+        }
+
+        async function loadNotifs() {
+          try {
+            const r = await fetch('/api/notifications');
+            const d = await r.json();
+            const shifts = d.shifts || [];
+            const scans  = d.completed_scans || [];
+
+            if (!shifts.length && !scans.length) {
+              body.innerHTML = '<div class="notif-panel-empty">No notifications yet.</div>';
+              return;
+            }
+
+            // Show badge on bell if there's anything
+            if (shifts.length || scans.length) {
+              bellBtn.classList.add('has-notifs');
+            }
+
+            let html = '';
+
+            if (shifts.length) {
+              html += '<div class="notif-panel-section">';
+              html += '<span class="notif-panel-section-label">Sentiment Shifts</span>';
+              shifts.forEach(function(s) {
+                const sign  = s.direction === 'up' ? '+' : '';
+                const cls   = s.direction === 'up' ? 'up' : 'down';
+                const dcls  = s.direction === 'up' ? 'notif-panel-delta-up' : 'notif-panel-delta-down';
+                const icon  = s.direction === 'up' ? upSvg() : downSvg();
+                html += '<div class="notif-panel-row">';
+                html += '<div class="notif-panel-icon ' + cls + '">' + icon + '</div>';
+                html += '<div class="notif-panel-info">';
+                html += '<div class="notif-panel-name">' + esc(s.name) + '</div>';
+                html += '<div class="notif-panel-meta"><span class="' + dcls + '">' + sign + s.delta + ' pts</span> &middot; PSI ' + s.latest_psi + ' &middot; ' + esc(s.date) + '</div>';
+                html += '</div>';
+                html += '<a href="/pulse" class="notif-panel-action">Pulse &rarr;</a>';
+                html += '</div>';
+              });
+              html += '</div>';
+            }
+
+            if (scans.length) {
+              html += '<div class="notif-panel-section">';
+              html += '<span class="notif-panel-section-label">Completed Scans</span>';
+              scans.forEach(function(s) {
+                const r    = s.psi_rating;
+                const pcls = r > 0 ? 'notif-panel-psi-pos' : (r < 0 ? 'notif-panel-psi-neg' : 'notif-panel-psi-neu');
+                html += '<div class="notif-panel-row">';
+                html += '<div class="notif-panel-icon done">' + checkSvg() + '</div>';
+                html += '<div class="notif-panel-info">';
+                html += '<div class="notif-panel-name">' + esc(s.name) + '</div>';
+                html += '<div class="notif-panel-meta">Completed ' + esc(s.completed_date) + ' &middot; <span class="' + pcls + '">PSI ' + r + '</span></div>';
+                html += '</div>';
+                html += '<button class="notif-panel-action" onclick="submitTopic(\'' + esc(s.name) + '\')">View &rarr;</button>';
+                html += '</div>';
+              });
+              html += '</div>';
+            }
+
+            body.innerHTML = html;
+          } catch (e) {
+            body.innerHTML = '<div class="notif-panel-empty">Could not load notifications.</div>';
+          }
+        }
+
+        function esc(str) {
+          return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        window.submitTopic = function(name) {
+          const form  = document.getElementById('scanPillForm');
+          const input = document.getElementById('scanPillTopic');
+          if (form && input) {
+            input.value = name;
+            form.action = '/trends';
+            form.method = 'POST';
+            form.style.display = '';
+            form.submit();
+          } else {
+            // Fallback: POST via a transient form
+            const f = document.createElement('form');
+            f.method = 'POST';
+            f.action = '/trends';
+            const i = document.createElement('input');
+            i.type = 'hidden';
+            i.name = 'topic';
+            i.value = name;
+            f.appendChild(i);
+            document.body.appendChild(f);
+            f.submit();
+          }
+        };
       })();
     </script>
 

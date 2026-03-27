@@ -175,9 +175,11 @@ def process_and_store_comments(
         print(f"[hf_analyzer] Empty DataFrame for '{topic_name}' — nothing to store.")
         return
 
-    print(f"[hf_analyzer] Classifying {len(df)} comments for '{topic_name}' via {mode}...")
-    fetch_progress["status"] = "analyzing"
-    fetch_progress["message"] = f"Classifying {len(df)} comments via emotion model..."
+    total_comments = len(df)
+    total_batches  = (total_comments + 99) // 100  # reflects default batch_size=100
+    print(f"[hf_analyzer] Classifying {total_comments} comments for '{topic_name}' via {mode} ({total_batches} batches)...")
+    fetch_progress["status"]  = "analyzing"
+    fetch_progress["message"] = f"Analysing sentiment... (0/{total_batches} batches)"
 
     from app.utils.emotion_classifier import classify_local, classify_api
 
@@ -251,15 +253,17 @@ def process_and_store_comments(
             "score": int(row.get("score", 0)),
         })
 
-    fetch_progress["message"] = f"Saving {len(db_records)} records to database..."
+    total_records = len(db_records)
+    fetch_progress["message"] = f"Saving results... (0/{total_records} comments)"
     batch_size = 50
     inserted = 0
 
-    for i in range(0, len(db_records), batch_size):
+    for i in range(0, total_records, batch_size):
         try:
             supabase.table("comments").insert(db_records[i:i + batch_size]).execute()
             inserted += len(db_records[i:i + batch_size])
             fetch_progress["current"] = inserted
+            fetch_progress["message"] = f"Saving results... ({inserted}/{total_records} comments)"
         except Exception as e:
             print(f"[hf_analyzer] Supabase insert error (batch {i}): {e}")
 

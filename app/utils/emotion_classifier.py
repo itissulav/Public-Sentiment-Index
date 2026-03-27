@@ -58,7 +58,7 @@ def classify_local(texts: list[str]) -> list[dict]:
 
 # ── HuggingFace Inference API (daily cron — 200–500 comments/day) ─────────────
 
-def classify_api(texts: list[str], batch_size: int = 25) -> list[dict]:
+def classify_api(texts: list[str], batch_size: int = 100) -> list[dict]:
     """
     Classify texts via HF Inference API.
     Returns same format as classify_local.
@@ -72,9 +72,18 @@ def classify_api(texts: list[str], batch_size: int = 25) -> list[dict]:
     headers = {"Authorization": f"Bearer {hf_key}"}
     results = []
     auth_failed = False
+    total_batches = (len(texts) + batch_size - 1) // batch_size
+
+    try:
+        from app.api.reddit import fetch_progress as _fp
+    except Exception:
+        _fp = None
 
     for i in range(0, len(texts), batch_size):
         batch = [str(t)[:512] if t else "" for t in texts[i:i + batch_size]]
+        batch_num = i // batch_size + 1
+        if _fp is not None:
+            _fp["message"] = f"Analysing sentiment... (batch {batch_num}/{total_batches})"
 
         if auth_failed:
             results.extend([_neutral_result() for _ in batch])
@@ -128,7 +137,7 @@ def classify_api(texts: list[str], batch_size: int = 25) -> list[dict]:
         if not success:
             results.extend([_neutral_result() for _ in batch])
 
-        time.sleep(2)  # throttle between batches on free tier
+        time.sleep(0.5)  # throttle between batches on free tier
 
     return results
 

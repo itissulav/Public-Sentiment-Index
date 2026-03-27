@@ -7,6 +7,7 @@ for user-submitted custom topics.
 
 import os
 import pandas as pd
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from app.services.supabase_client import admin_supabase
 
 
@@ -56,10 +57,13 @@ def run_background_analysis(app, user_id, topic_name):
             subreddits = (sources.get("subreddits") or ["all"])[:MAX_SUBREDDITS]
             print(f"[bg] Gemini sources: category={sources.get('category')}, subreddits={subreddits}")
 
-            # Step 2: Fetch Reddit comments
+            # Step 2: Fetch Reddit comments — all subreddits in parallel
             job_tracker.set_step(user_id, topic_name, "fetching")
+            from app.api.reddit import fetch_progress
+            fetch_progress["message"] = f"Fetching from {len(subreddits)} subreddits in parallel..."
             all_dfs = []
-            for sub in subreddits:
+
+            def _fetch_sub(sub):
                 try:
                     df_sub = get_reddit_comments(
                         topic_name, limit_posts=50,
@@ -68,10 +72,21 @@ def run_background_analysis(app, user_id, topic_name):
                     )
                     if not df_sub.empty:
                         df_sub["source_id"] = sub
-                        all_dfs.append(df_sub)
-                        print(f"[bg] Got {len(df_sub)} comments from r/{sub}")
+                    return sub, df_sub
                 except Exception as e:
                     print(f"[bg] Error fetching r/{sub}: {e}")
+                    return sub, pd.DataFrame()
+
+            completed = 0
+            with ThreadPoolExecutor(max_workers=min(5, len(subreddits))) as ex:
+                futures = {ex.submit(_fetch_sub, sub): sub for sub in subreddits}
+                for fut in as_completed(futures):
+                    sub, df_sub = fut.result()
+                    completed += 1
+                    if not df_sub.empty:
+                        all_dfs.append(df_sub)
+                        print(f"[bg] Got {len(df_sub)} comments from r/{sub} ({completed}/{len(subreddits)} done)")
+                    fetch_progress["message"] = f"Fetching Reddit... ({completed}/{len(subreddits)} subreddits done)"
 
             if not all_dfs:
                 print(f"[bg] No Reddit data found for '{topic_name}'")
@@ -164,6 +179,23 @@ def run_background_analysis(app, user_id, topic_name):
 
             job_tracker.mark_complete(user_id, topic_name)
             print(f"[bg] Analysis complete for '{topic_name}'")
+
+            # Pre-compute charts/deep-dive cache in a separate thread so the user
+            # gets results immediately and the cache is ready for subsequent visits.
+            def _precompute(_uid=user_id, _name=topic_name):
+                try:
+                    from app.services.supabase_client import admin_supabase as _supa
+                    _res = _supa.table("topics").select("id") \
+                        .eq("name", _name).eq("user_id", str(_uid)).maybe_single().execute()
+                    _tid = (_res.data or {}).get("id")
+                    if _tid:
+                        from app.utils.chart_cache import precompute_and_store
+                        precompute_and_store(_tid, topic_name=_name)
+                except Exception as _e:
+                    print(f"[bg] Pre-compute failed for '{_name}': {_e}")
+
+            import threading as _threading
+            _threading.Thread(target=_precompute, daemon=True).start()
 
         except Exception as e:
             import traceback

@@ -26,17 +26,19 @@ CRITICAL RULES — read carefully before generating queries:
 1. NEVER use "unboxing" unless the topic is a physical consumer product (smartphone, laptop, gadget, headphones).
 2. NEVER use "hands on" unless the topic is a physical product you can hold.
 3. For TV shows, movies, anime, or any entertainment: use "review", "analysis", "explained", "reaction", "discussion", "season [X]", "episode breakdown".
-4. For politicians or political events: use "analysis", "speech reaction", "debate", "explained", "documentary".
+4. For politicians, political events, or international figures: ALWAYS prefer established news channels (CNN, BBC News, Sky News, Al Jazeera, MSNBC, Fox News) and political analysis channels. Use queries like "{topic} news", "{topic} analysis BBC", "{topic} CNN report".
 5. For sports: use "highlights", "analysis", "match review", "breakdown".
 6. Every single query MUST contain the exact topic name "{topic}" so YouTube results are exclusively about this topic — not toys, not unrelated products, not similar names.
 7. Be specific enough that an ambiguous name (e.g. "The Boys") cannot match unrelated content (toys, unboxing channels, etc.).
+8. ALL queries must target informative or opinionated content only — reviews, analysis, debates, documentaries, news reports. NEVER generate queries that could return toy unboxings, product demonstrations for unrelated products, or entertainment content unrelated to the topic.
+9. Do NOT generate queries that could return YouTube Shorts or live stream results.
 
 First, determine the topic type for "{topic}":
 - Is it a TV show? (e.g. The Boys, House of the Dragon, Severance)
 - Is it a movie? (e.g. Avengers Doomsday, Interstellar)
-- Is it a politician or political figure? (e.g. Donald Trump, Joe Biden)
+- Is it a politician, political figure, or international personality? (e.g. Donald Trump, Joe Biden, Elon Musk)
 - Is it a physical tech product? (e.g. MacBook, iPhone, GPU)
-- Is it a geopolitical event? (e.g. America vs Iran, Russia Ukraine)
+- Is it a geopolitical event? (e.g. America vs Iran, Russia Ukraine, Gaza Conflict)
 - Is it a sports event or team?
 - Other?
 
@@ -52,15 +54,14 @@ Rules:
 - subreddits: 3 to 5 most relevant communities (e.g. for The Boys: ["TheBoys", "television", "Superhero_Shows"]), no 'r/' prefix, no duplicates
 - youtube_queries: exactly 5 search queries, each MUST contain "{topic}".
     Choose query templates based on topic type:
-    * TV shows / movies / anime → "The Boys review", "The Boys season 4 analysis", "The Boys explained", "The Boys reaction", "The Boys finale discussion"
-    * Politicians / political figures → "{topic} speech analysis", "{topic} policy explained", "{topic} debate reaction"
+    * TV shows / movies / anime → "{topic} review", "{topic} season analysis", "{topic} explained", "{topic} reaction", "{topic} finale discussion"
+    * Politicians / political figures / international personalities → "{topic} BBC News", "{topic} CNN analysis", "{topic} Sky News", "{topic} speech reaction", "{topic} Al Jazeera"
+    * Geopolitical events → "{topic} BBC News", "{topic} Al Jazeera", "{topic} analysis", "{topic} explained", "{topic} documentary"
     * Physical tech products → "{topic} review", "{topic} unboxing", "{topic} hands on"
-    * Geopolitical events → "{topic} explained", "{topic} analysis", "{topic} documentary"
     * Sports → "{topic} highlights", "{topic} match analysis", "{topic} breakdown"
-    * Creator-specific (queries 3-5): combine topic with the 2-3 most relevant YouTubers who cover this topic type.
+    * Creator-specific (queries 3-5 for non-political topics): combine topic with the 2-3 most relevant YouTubers who cover this topic type.
       For tech products: MKBHD, Dave2D, Linus Tech Tips.
       For movies/TV: Chris Stuckmann, YMS, Screen Junkies, Pitch Meeting.
-      For politics: Philip DeFranco, MSNBC, CNN, BBC News.
       For sports: ESPN, SkySports.
       Format: "MKBHD {topic}" — always include the topic name first.
 - news_keywords: 2 to 4 keywords for searching news articles about this topic

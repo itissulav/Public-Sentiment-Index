@@ -50,11 +50,11 @@
     </div>
 
     {% set img_map = {
-      "Donald Trump":      "donaldtrump.png",
-      "The Boys":          "theboys.png",
-      "Avengers Doomsday": "avengersdoomsday.png",
-      "Macbook Neo":       "macbookneo.png",
-      "America vs Iran":   "americavsiran.png"
+      "Donald Trump":  "donaldtrump.png",
+      "Elon Musk":     "elonmusk.png",
+      "Gaza Conflict": "gazaconflict.png",
+      "AI Technology": "aitechnology.png",
+      "Climate Change":"climatechange.png"
     } %}
 
     <div class="trends-list">
@@ -136,21 +136,21 @@
 
     <!-- Right: photo collage -->
     <div class="hero-right">
-      <div class="hero-photo-cell">
-        <img src="{{ url_for('static', filename='images/donaldtrump.png') }}" alt="Donald Trump">
+      <div class="hero-photo-cell" data-hero-topic="Donald Trump">
+        <img src="{{ url_for('static', filename='images/donaldtrump.png') }}" alt="Donald Trump" class="hero-cell-img">
         <span class="hero-photo-label">Donald Trump</span>
       </div>
-      <div class="hero-photo-cell">
-        <img src="{{ url_for('static', filename='images/theboys.png') }}" alt="The Boys">
-        <span class="hero-photo-label">The Boys</span>
+      <div class="hero-photo-cell" data-hero-topic="Elon Musk" style="background:linear-gradient(135deg,#1a1028 0%,#2d1f3d 100%);">
+        <img alt="Elon Musk" class="hero-cell-img" style="display:none;">
+        <span class="hero-photo-label">Elon Musk</span>
       </div>
-      <div class="hero-photo-cell">
-        <img src="{{ url_for('static', filename='images/avengersdoomsday.png') }}" alt="Avengers Doomsday">
-        <span class="hero-photo-label">Avengers Doomsday</span>
+      <div class="hero-photo-cell" data-hero-topic="Gaza Conflict" style="background:linear-gradient(135deg,#0d1f2d 0%,#1a3040 100%);">
+        <img alt="Gaza Conflict" class="hero-cell-img" style="display:none;">
+        <span class="hero-photo-label">Gaza Conflict</span>
       </div>
-      <div class="hero-photo-cell">
-        <img src="{{ url_for('static', filename='images/americavsiran.png') }}" alt="America vs Iran">
-        <span class="hero-photo-label">America vs Iran</span>
+      <div class="hero-photo-cell" data-hero-topic="Climate Change" style="background:linear-gradient(135deg,#111827 0%,#1e2d40 100%);">
+        <img alt="Climate Change" class="hero-cell-img" style="display:none;">
+        <span class="hero-photo-label">Climate Change</span>
       </div>
     </div>
 
@@ -195,6 +195,33 @@
 </div>
 
 <script>
+// ── Hero collage: load Wikipedia images for cells without static images ──
+(function () {
+  async function loadTopicImage(topicName, onLoad) {
+    var key = 'topicImg_' + topicName;
+    var cached = sessionStorage.getItem(key);
+    if (cached !== null) { if (cached) onLoad(cached); return; }
+    try {
+      var res  = await fetch('/api/topic-image?topic=' + encodeURIComponent(topicName));
+      var data = await res.json();
+      var url  = data.url || '';
+      sessionStorage.setItem(key, url);
+      if (url) onLoad(url);
+    } catch (e) { sessionStorage.setItem(key, ''); }
+  }
+
+  document.querySelectorAll('.hero-photo-cell[data-hero-topic]').forEach(function (cell) {
+    var topic = cell.dataset.heroTopic;
+    var img   = cell.querySelector('.hero-cell-img');
+    if (!img || img.src) return; // already has a static src
+    loadTopicImage(topic, function (url) {
+      img.src = url;
+      img.style.display = 'block';
+      cell.style.background = 'none';
+    });
+  });
+})();
+
 function showHomeLoader() {
   var o = document.getElementById('home-loader');
   o.style.display = 'flex';

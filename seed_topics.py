@@ -422,7 +422,7 @@ def seed_topic(
             candidates = {}
             for query in yt_queries:
                 try:
-                    for video in search_videos(query, yt_api_key, max_results=10, days_back=180):
+                    for video in search_videos(query, yt_api_key, max_results=10, days_back=90):
                         vid_id = video["video_id"]
                         if vid_id not in candidates and _title_is_relevant(video["title"]):
                             candidates[vid_id] = video

@@ -23,7 +23,7 @@ _COMMENT_COLS = (
 )
 
 _PREDEFINED_TOPICS = {
-    "Donald Trump", "The Boys", "Avengers Doomsday", "Macbook Neo", "America vs Iran",
+    "Donald Trump", "Elon Musk", "Gaza Conflict", "AI Technology", "Climate Change",
 }
 
 def _flatten_comment_row(row: dict) -> dict:
@@ -148,11 +148,11 @@ def trends():
 
     # Build search autocomplete suggestions: predefined + user history
     _TRENDS_IMG = {
-        "Donald Trump":      "donaldtrump.png",
-        "The Boys":          "theboys.png",
-        "Avengers Doomsday": "avengersdoomsday.png",
-        "Macbook Neo":       "macbookneo.png",
-        "America vs Iran":   "americavsiran.png",
+        "Donald Trump":  "donaldtrump.png",
+        "Elon Musk":     "elonmusk.png",
+        "Gaza Conflict": "gazaconflict.png",
+        "AI Technology": "aitechnology.png",
+        "Climate Change":"climatechange.png",
     }
     suggestions = [{'name': t, 'kind': 'featured', 'img': _TRENDS_IMG.get(t, '')} for t in PREDEFINED_TOPICS]
     if user:
@@ -333,8 +333,42 @@ def trends():
                     topic_info["sentiment"] = "Positive" if (topic_info.get("rating") or 0) > 0 else ("Negative" if (topic_info.get("rating") or 0) < 0 else "Neutral")
                     count_res = admin_supabase.table("comments").select("id", count="exact").eq("topic_id", topic_id).execute()
                     topic_info["total_comments"] = count_res.count or 0
-                    if not extract_and_visualize(topic_id):
-                        flash("No comment data found for this saved scan.")
+                    _hist_cache_hit = False
+                    try:
+                        _pc = admin_supabase.table("precomputed_charts") \
+                            .select("time_windows, metadata") \
+                            .eq("topic_id", topic_id) \
+                            .maybe_single().execute()
+                        _pc_data = _pc.data or {}
+                        _tw = _pc_data.get("time_windows") or {}
+                        _md = _pc_data.get("metadata") or {}
+                        _win_data = _tw.get("90") or {}
+                        if _tw and _win_data:
+                            charts_all      = _win_data.get("all",              {})
+                            charts_reddit   = _win_data.get("reddit",           {})
+                            charts_youtube  = _win_data.get("youtube",          {})
+                            charts_data     = charts_reddit
+                            insights_all     = _win_data.get("insights_all",     {})
+                            insights_reddit  = _win_data.get("insights_reddit",  {})
+                            insights_youtube = _win_data.get("insights_youtube", {})
+                            insights_data    = insights_reddit
+                            source_split    = _md.get("source_split",    {})
+                            has_youtube     = _md.get("has_youtube",     False)
+                            top_positive    = _md.get("top_positive")
+                            top_negative    = _md.get("top_negative")
+                            top_positive_yt = _md.get("top_positive_yt")
+                            top_negative_yt = _md.get("top_negative_yt")
+                            yt_video_cards  = _md.get("yt_video_cards",  [])
+                            current_topic_id = topic_id
+                            has_data         = True
+                            time_windows     = _tw
+                            _hist_cache_hit  = True
+                            print(f"[trends] History cache hit for topic_id={topic_id}")
+                    except Exception as _e:
+                        print(f"[trends] History cache miss for topic_id={topic_id}: {_e}")
+                    if not _hist_cache_hit:
+                        if not extract_and_visualize(topic_id):
+                            flash("No comment data found for this saved scan.")
                 else:
                     flash("Saved scan not found or access denied.")
 
@@ -358,38 +392,77 @@ def trends():
                     topic_info["sentiment"] = "Positive" if (topic_info.get("rating") or 0) > 0 else ("Negative" if (topic_info.get("rating") or 0) < 0 else "Neutral")
                     count_res = admin_supabase.table("comments").select("id", count="exact").eq("topic_id", topic_id).execute()
                     topic_info["total_comments"] = count_res.count or 0
-                    if not extract_and_visualize(topic_id, days=selected_days):
-                        flash(f"No comments found for predefined topic: {current_topic}")
-                    else:
-                        # Pre-compute chart+insight data for all 3 time windows so the
-                        # client can switch between 30D/60D/90D instantly without a reload.
-                        from app.utils.insights import compute_all_insights
-                        from datetime import datetime, timedelta, timezone
-                        _cached_rows = topic_cache.get(topic_id) or []
-                        time_windows = {}
-                        for _win in [30, 60, 90]:
-                            _cutoff_date = (datetime.now(timezone.utc) - timedelta(days=_win)).strftime('%Y-%m-%d')
-                            _rows = [r for r in _cached_rows if r.get("published_at") and str(r["published_at"])[:10] >= _cutoff_date]
-                            if _rows:
-                                _dfa = pd.DataFrame(_rows)
-                                _dfr = _dfa[_dfa["source_type"] == "reddit"].copy() if "source_type" in _dfa.columns else _dfa.copy()
-                                _dfy = _dfa[_dfa["source_type"] == "youtube"].copy() if "source_type" in _dfa.columns else pd.DataFrame()
-                                def _sc(df, po=True):
-                                    if df is None or df.empty: return {}
-                                    try: return ElectionDataVisualizer(df).get_all_charts_data(primary_only=po)
-                                    except: return {}
-                                def _si(df):
-                                    if df is None or df.empty: return {}
-                                    try: return compute_all_insights(df)
-                                    except: return {}
-                                time_windows[str(_win)] = {
-                                    "all":             _sc(_dfa, po=False),
-                                    "reddit":          _sc(_dfr, po=False),
-                                    "youtube":         _sc(_dfy, po=False),
-                                    "insights_all":    _si(_dfa),
-                                    "insights_reddit": _si(_dfr),
-                                    "insights_youtube": _si(_dfy),
-                                }
+                    # ── Try full cache bypass (no extract_and_visualize call) ───────
+                    _full_cache_hit = False
+                    try:
+                        _pc = admin_supabase.table("precomputed_charts") \
+                            .select("time_windows, metadata") \
+                            .eq("topic_id", topic_id) \
+                            .single().execute()
+                        _pc_data = _pc.data or {}
+                        _tw = _pc_data.get("time_windows") or {}
+                        _md = _pc_data.get("metadata") or {}
+                        _win_key  = str(selected_days)
+                        _win_data = _tw.get(_win_key) or _tw.get("90") or {}
+
+                        if _tw and _md and _win_data:
+                            charts_all      = _win_data.get("all",              {})
+                            charts_reddit   = _win_data.get("reddit",           {})
+                            charts_youtube  = _win_data.get("youtube",          {})
+                            charts_data     = charts_reddit
+                            insights_all     = _win_data.get("insights_all",     {})
+                            insights_reddit  = _win_data.get("insights_reddit",  {})
+                            insights_youtube = _win_data.get("insights_youtube", {})
+                            insights_data    = insights_reddit
+
+                            source_split    = _md.get("source_split",    {})
+                            has_youtube     = _md.get("has_youtube",     False)
+                            top_positive    = _md.get("top_positive")
+                            top_negative    = _md.get("top_negative")
+                            top_positive_yt = _md.get("top_positive_yt")
+                            top_negative_yt = _md.get("top_negative_yt")
+                            yt_video_cards  = _md.get("yt_video_cards",  [])
+                            current_topic_id = topic_id
+                            has_data         = True
+                            time_windows     = _tw
+                            _full_cache_hit  = True
+                            print(f"[trends] Full cache hit for topic_id={topic_id} ({_win_key}D)")
+                    except Exception as _e:
+                        print(f"[trends] precomputed_charts miss for topic_id={topic_id}: {_e}")
+
+                    if not _full_cache_hit:
+                        # Fallback: live fetch + compute
+                        if not extract_and_visualize(topic_id, days=selected_days):
+                            flash(f"No comments found for predefined topic: {current_topic}")
+                        else:
+                            # Live time_windows computation from in-memory cache
+                            from app.utils.insights import compute_all_insights
+                            from datetime import datetime, timedelta, timezone
+                            _cached_rows = topic_cache.get(topic_id) or []
+                            time_windows = {}
+                            for _win in [30, 60, 90]:
+                                _cutoff_date = (datetime.now(timezone.utc) - timedelta(days=_win)).strftime('%Y-%m-%d')
+                                _rows = [r for r in _cached_rows if r.get("published_at") and str(r["published_at"])[:10] >= _cutoff_date]
+                                if _rows:
+                                    _dfa = pd.DataFrame(_rows)
+                                    _dfr = _dfa[_dfa["source_type"] == "reddit"].copy() if "source_type" in _dfa.columns else _dfa.copy()
+                                    _dfy = _dfa[_dfa["source_type"] == "youtube"].copy() if "source_type" in _dfa.columns else pd.DataFrame()
+                                    def _sc(df, po=True):
+                                        if df is None or df.empty: return {}
+                                        try: return ElectionDataVisualizer(df).get_all_charts_data(primary_only=po)
+                                        except: return {}
+                                    def _si(df):
+                                        if df is None or df.empty: return {}
+                                        try: return compute_all_insights(df)
+                                        except: return {}
+                                    time_windows[str(_win)] = {
+                                        "all":              _sc(_dfa, po=False),
+                                        "reddit":           _sc(_dfr, po=False),
+                                        "youtube":          _sc(_dfy, po=False),
+                                        "insights_all":     _si(_dfa),
+                                        "insights_reddit":  _si(_dfr),
+                                        "insights_youtube": _si(_dfy),
+                                    }
                 else:
                     flash(f"No database records found for preset topic: {current_topic}. Please run the seeder script first!")
                     
@@ -427,7 +500,41 @@ def trends():
                             topic_info["sentiment"] = "Positive" if (topic_info.get("rating") or 0) > 0 else ("Negative" if (topic_info.get("rating") or 0) < 0 else "Neutral")
                             count_res = admin_supabase.table("comments").select("id", count="exact").eq("topic_id", topic_id).execute()
                             topic_info["total_comments"] = count_res.count or 0
-                            extract_and_visualize(topic_id)
+                            _custom_cache_hit = False
+                            try:
+                                _pc = admin_supabase.table("precomputed_charts") \
+                                    .select("time_windows, metadata") \
+                                    .eq("topic_id", topic_id) \
+                                    .maybe_single().execute()
+                                _pc_data = _pc.data or {}
+                                _tw = _pc_data.get("time_windows") or {}
+                                _md = _pc_data.get("metadata") or {}
+                                _win_data = _tw.get("90") or {}
+                                if _tw and _md and _win_data:
+                                    charts_all      = _win_data.get("all",              {})
+                                    charts_reddit   = _win_data.get("reddit",           {})
+                                    charts_youtube  = _win_data.get("youtube",          {})
+                                    charts_data     = charts_reddit
+                                    insights_all     = _win_data.get("insights_all",     {})
+                                    insights_reddit  = _win_data.get("insights_reddit",  {})
+                                    insights_youtube = _win_data.get("insights_youtube", {})
+                                    insights_data    = insights_reddit
+                                    source_split    = _md.get("source_split",    {})
+                                    has_youtube     = _md.get("has_youtube",     False)
+                                    top_positive    = _md.get("top_positive")
+                                    top_negative    = _md.get("top_negative")
+                                    top_positive_yt = _md.get("top_positive_yt")
+                                    top_negative_yt = _md.get("top_negative_yt")
+                                    yt_video_cards  = _md.get("yt_video_cards",  [])
+                                    current_topic_id = topic_id
+                                    has_data         = True
+                                    time_windows     = _tw
+                                    _custom_cache_hit = True
+                                    print(f"[trends] Custom topic cache hit for topic_id={topic_id}")
+                            except Exception as _e:
+                                print(f"[trends] Custom topic cache miss for topic_id={topic_id}: {_e}")
+                            if not _custom_cache_hit:
+                                extract_and_visualize(topic_id)
                         else:
                             flash(f"Analysis completed but data could not be loaded. Check your History.")
 
@@ -453,7 +560,41 @@ def trends():
                             topic_info["sentiment"] = "Positive" if (topic_info.get("rating") or 0) > 0 else ("Negative" if (topic_info.get("rating") or 0) < 0 else "Neutral")
                             count_res = admin_supabase.table("comments").select("id", count="exact").eq("topic_id", topic_id).execute()
                             topic_info["total_comments"] = count_res.count or 0
-                            extract_and_visualize(topic_id)
+                            _custom_cache_hit = False
+                            try:
+                                _pc = admin_supabase.table("precomputed_charts") \
+                                    .select("time_windows, metadata") \
+                                    .eq("topic_id", topic_id) \
+                                    .maybe_single().execute()
+                                _pc_data = _pc.data or {}
+                                _tw = _pc_data.get("time_windows") or {}
+                                _md = _pc_data.get("metadata") or {}
+                                _win_data = _tw.get("90") or {}
+                                if _tw and _md and _win_data:
+                                    charts_all      = _win_data.get("all",              {})
+                                    charts_reddit   = _win_data.get("reddit",           {})
+                                    charts_youtube  = _win_data.get("youtube",          {})
+                                    charts_data     = charts_reddit
+                                    insights_all     = _win_data.get("insights_all",     {})
+                                    insights_reddit  = _win_data.get("insights_reddit",  {})
+                                    insights_youtube = _win_data.get("insights_youtube", {})
+                                    insights_data    = insights_reddit
+                                    source_split    = _md.get("source_split",    {})
+                                    has_youtube     = _md.get("has_youtube",     False)
+                                    top_positive    = _md.get("top_positive")
+                                    top_negative    = _md.get("top_negative")
+                                    top_positive_yt = _md.get("top_positive_yt")
+                                    top_negative_yt = _md.get("top_negative_yt")
+                                    yt_video_cards  = _md.get("yt_video_cards",  [])
+                                    current_topic_id = topic_id
+                                    has_data         = True
+                                    time_windows     = _tw
+                                    _custom_cache_hit = True
+                                    print(f"[trends] Custom topic cache hit for topic_id={topic_id}")
+                            except Exception as _e:
+                                print(f"[trends] Custom topic cache miss for topic_id={topic_id}: {_e}")
+                            if not _custom_cache_hit:
+                                extract_and_visualize(topic_id)
                         else:
                             # Cross-user cache: reuse any recent scan of the same topic (within 7 days)
                             from datetime import datetime, timedelta, timezone
@@ -476,7 +617,41 @@ def trends():
                                 topic_info["sentiment"] = "Positive" if (topic_info.get("rating") or 0) > 0 else ("Negative" if (topic_info.get("rating") or 0) < 0 else "Neutral")
                                 count_res = admin_supabase.table("comments").select("id", count="exact").eq("topic_id", topic_id).execute()
                                 topic_info["total_comments"] = count_res.count or 0
-                                extract_and_visualize(topic_id)
+                                _xuser_cache_hit = False
+                                try:
+                                    _pc = admin_supabase.table("precomputed_charts") \
+                                        .select("time_windows, metadata") \
+                                        .eq("topic_id", topic_id) \
+                                        .maybe_single().execute()
+                                    _pc_data = _pc.data or {}
+                                    _tw = _pc_data.get("time_windows") or {}
+                                    _md = _pc_data.get("metadata") or {}
+                                    _win_data = _tw.get("90") or {}
+                                    if _tw and _win_data:
+                                        charts_all      = _win_data.get("all",              {})
+                                        charts_reddit   = _win_data.get("reddit",           {})
+                                        charts_youtube  = _win_data.get("youtube",          {})
+                                        charts_data     = charts_reddit
+                                        insights_all     = _win_data.get("insights_all",     {})
+                                        insights_reddit  = _win_data.get("insights_reddit",  {})
+                                        insights_youtube = _win_data.get("insights_youtube", {})
+                                        insights_data    = insights_reddit
+                                        source_split    = _md.get("source_split",    {})
+                                        has_youtube     = _md.get("has_youtube",     False)
+                                        top_positive    = _md.get("top_positive")
+                                        top_negative    = _md.get("top_negative")
+                                        top_positive_yt = _md.get("top_positive_yt")
+                                        top_negative_yt = _md.get("top_negative_yt")
+                                        yt_video_cards  = _md.get("yt_video_cards",  [])
+                                        current_topic_id = topic_id
+                                        has_data         = True
+                                        time_windows     = _tw
+                                        _xuser_cache_hit = True
+                                        print(f"[trends] Cross-user cache hit for topic_id={topic_id}")
+                                except Exception as _e:
+                                    print(f"[trends] Cross-user cache miss for topic_id={topic_id}: {_e}")
+                                if not _xuser_cache_hit:
+                                    extract_and_visualize(topic_id)
                             else:
                                 # Truly new topic — kick off a new background thread
                                 job_tracker.mark_processing(current_user_id, current_topic)
@@ -530,7 +705,7 @@ def trends():
     )
 
 
-PREDEFINED_TOPICS = ["Donald Trump", "The Boys", "Avengers Doomsday", "Macbook Neo", "America vs Iran"]
+PREDEFINED_TOPICS = ["Donald Trump", "Elon Musk", "Gaza Conflict", "AI Technology", "Climate Change"]
 
 
 @main_bp.route("/pulse")
@@ -642,6 +817,20 @@ def trends_deep_dive():
 
     if not topic_id:
         return {"error": "missing topic_id"}, 400
+
+    # ── Full cache bypass (any topic with a precomputed row) ─────────────────
+    try:
+        _dd_row = admin_supabase.table("precomputed_charts") \
+            .select("deep_dive") \
+            .eq("topic_id", topic_id) \
+            .maybe_single().execute()
+        _dd = (_dd_row.data or {}).get("deep_dive")
+        if _dd:
+            print(f"[deep-dive] Full cache hit for topic_id={topic_id}")
+            return _dd
+    except Exception as _e:
+        print(f"[deep-dive] Cache miss for topic_id={topic_id}: {_e}")
+    # Falls through to live computation on cache miss
 
     PAGE = 1000
 
@@ -843,11 +1032,11 @@ def compare():
 
     # Build autocomplete suggestions: predefined + user history
     _FEATURED_IMG = {
-        "Donald Trump":      "donaldtrump.png",
-        "The Boys":          "theboys.png",
-        "Avengers Doomsday": "avengersdoomsday.png",
-        "Macbook Neo":       "macbookneo.png",
-        "America vs Iran":   "americavsiran.png",
+        "Donald Trump":  "donaldtrump.png",
+        "Elon Musk":     "elonmusk.png",
+        "Gaza Conflict": "gazaconflict.png",
+        "AI Technology": "aitechnology.png",
+        "Climate Change":"climatechange.png",
     }
     suggestions = [{'name': t, 'kind': 'featured', 'img': _FEATURED_IMG.get(t, '')} for t in PREDEFINED_TOPICS]
     if user:
@@ -925,40 +1114,197 @@ def compare():
                 flash(f'"{topic_name}" hasn\'t been analysed yet. Run a Custom Analysis from the Trends page first, then come back to compare.')
                 return None, None
 
-            df_a, info_a = load_topic_for_compare(topic_a_name)
-            df_b, info_b = load_topic_for_compare(topic_b_name)
+            # ── Resolve topic IDs and info cheaply (no comment fetch) ──────────
+            def _resolve_topic(t_name):
+                """Return (topic_id, info_dict) without fetching comments."""
+                def _snap(t_id):
+                    snap = admin_supabase.table("daily_snapshots") \
+                        .select("psi_rating, total_comments, dominant_emotion") \
+                        .eq("topic_id", t_id).order("snapshot_date", desc=True).limit(1).execute()
+                    info = snap.data[0] if snap.data else {}
+                    info["id"]        = t_id
+                    info["name"]      = t_name
+                    info["rating"]    = info.pop("psi_rating", 0)
+                    info["sentiment"] = "Positive" if (info.get("rating") or 0) > 0 else ("Negative" if (info.get("rating") or 0) < 0 else "Neutral")
+                    count_res = admin_supabase.table("comments").select("id", count="exact").eq("topic_id", t_id).execute()
+                    info["total_comments"] = count_res.count or 0
+                    return info
+                if t_name in PREDEFINED_TOPICS:
+                    res = admin_supabase.table("topics").select("id").eq("name", t_name).is_("user_id", "null").execute()
+                    if res.data:
+                        return res.data[0]["id"], _snap(res.data[0]["id"])
+                if current_user_id:
+                    res = admin_supabase.table("topics").select("id").eq("name", t_name).eq("user_id", current_user_id).execute()
+                    if res.data:
+                        return res.data[0]["id"], _snap(res.data[0]["id"])
+                return None, None
 
-            if df_a is not None and df_b is not None:
-                from app.utils.comparator import build_comparison_data
+            topic_id_a, info_a = _resolve_topic(topic_a_name)
+            topic_id_b, info_b = _resolve_topic(topic_b_name)
 
-                def _src(df, s):
-                    if 'source_type' in df.columns:
-                        sub = df[df['source_type'] == s].copy()
-                        return sub if not sub.empty else pd.DataFrame(columns=df.columns)
-                    return pd.DataFrame()
-
-                df_a_r, df_b_r = _src(df_a, 'reddit'),  _src(df_b, 'reddit')
-                df_a_y, df_b_y = _src(df_a, 'youtube'), _src(df_b, 'youtube')
-                cmp_reddit  = build_comparison_data(df_a_r, info_a, df_b_r, info_b) if not (df_a_r.empty and df_b_r.empty) else None
-                cmp_youtube = build_comparison_data(df_a_y, info_a, df_b_y, info_b) if not (df_a_y.empty and df_b_y.empty) else None
-                cmp_overall = build_comparison_data(df_a, info_a, df_b, info_b)
-                comparison_data = {
-                    'overall': cmp_overall,
-                    'reddit':  cmp_reddit,
-                    'youtube': cmp_youtube,
-                }
-
-                # Gemini AI overviews (one call using overall data)
+            if topic_id_a and topic_id_b:
+                # ── Try precomputed cache bypass ─────────────────────────────
+                _comp_hit = False
                 try:
-                    from app.utils.gemini_insights import get_compare_insights
-                    gemini_compare = get_compare_insights(cmp_overall, topic_a_name, topic_b_name)
-                except Exception as e:
-                    print(f"[compare] Gemini error: {e}")
-                    gemini_compare = {}
+                    from app.utils.comparator import _align_timeseries, EMOTION_LABELS
+                    _rows = admin_supabase.table("precomputed_charts") \
+                        .select("topic_id, time_windows, metadata") \
+                        .in_("topic_id", [topic_id_a, topic_id_b]).execute()
+                    _cache = {r["topic_id"]: r for r in (_rows.data or [])}
+                    _ra = _cache.get(topic_id_a, {});  _rb = _cache.get(topic_id_b, {})
+                    _mda = _ra.get("metadata") or {};  _mdb = _rb.get("metadata") or {}
+
+                    def _build_cmp_from_cache(tw_key):
+                        _twa = (_ra.get("time_windows") or {}).get(tw_key, {})
+                        _twb = (_rb.get("time_windows") or {}).get(tw_key, {})
+                        _ca = _twa.get("all", {});  _cb = _twb.get("all", {})
+                        _ia = _twa.get("insights_all", {});  _ib = _twb.get("insights_all", {})
+                        if not (_ca and _cb and _ia and _ib):
+                            return None
+                        def _al(key):
+                            a = _ca.get(key, {}); b = _cb.get(key, {})
+                            return _align_timeseries(a.get("labels",[]), a.get("values",[]),
+                                                     b.get("labels",[]), b.get("values",[]))
+                        _tl, _va_tl, _vb_tl = _align_timeseries(
+                            _ca.get("chart2_sentiment_timeline",{}).get("labels",[]),
+                            _ca.get("chart2_sentiment_timeline",{}).get("datasets",{}).get("Positive",[]),
+                            _cb.get("chart2_sentiment_timeline",{}).get("labels",[]),
+                            _cb.get("chart2_sentiment_timeline",{}).get("datasets",{}).get("Positive",[]),
+                        )
+                        _vl, _va_vl, _vb_vl = _al("chart6_sentiment_volatility")
+                        _mo, _va_mo, _vb_mo = _align_timeseries(
+                            _ia.get("sentiment_momentum",{}).get("labels",[]),
+                            _ia.get("sentiment_momentum",{}).get("values",[]),
+                            _ib.get("sentiment_momentum",{}).get("labels",[]),
+                            _ib.get("sentiment_momentum",{}).get("values",[]),
+                        )
+                        _cu, _va_cu, _vb_cu = _al("chart14_cumulative_posts")
+                        def _weekly_totals(tw_all):
+                            ds = tw_all.get("chart15_sentiment_by_day",{}).get("datasets",{})
+                            pos = ds.get("Positive",[0]*7); neg = ds.get("Negative",[0]*7); neu = ds.get("Neutral",[0]*7)
+                            return [p+n+u for p,n,u in zip(pos,neg,neu)]
+                        emo_a = _ia.get("emotion_distribution",{}); emo_b = _ib.get("emotion_distribution",{})
+                        map_a = dict(zip(emo_a.get("labels",[]), emo_a.get("values",[])))
+                        map_b = dict(zip(emo_b.get("labels",[]), emo_b.get("values",[])))
+                        emo_labels_cap = [e.capitalize() for e in EMOTION_LABELS]
+                        tka = _ia.get("takeaways",{}); tkb = _ib.get("takeaways",{})
+                        hrs_a = _ca.get("chart10_volume_by_hour",{}).get("values",[0]*24)
+                        hrs_b = _cb.get("chart10_volume_by_hour",{}).get("values",[0]*24)
+                        up_a = (_ca.get("chart3_avg_upvotes_sentiment",{}).get("values") or [0,0])[:2]
+                        up_b = (_cb.get("chart3_avg_upvotes_sentiment",{}).get("values") or [0,0])[:2]
+                        return {
+                            "topic_a": {**info_a},
+                            "topic_b": {**info_b},
+                            "chart_split":     {"labels":["Positive","Negative"], "topic_a":[tka.get("pos_pct",0),tka.get("neg_pct",0)], "topic_b":[tkb.get("pos_pct",0),tkb.get("neg_pct",0)]},
+                            "chart_upvotes":   {"labels":["Positive","Negative"], "topic_a":up_a, "topic_b":up_b},
+                            "chart_timeline":  {"labels":_tl, "topic_a":_va_tl, "topic_b":_vb_tl},
+                            "chart_volatility":{"labels":_vl, "topic_a":_va_vl, "topic_b":_vb_vl},
+                            "chart_hours":     {"labels":[f'{h:02d}:00' for h in range(24)], "topic_a":hrs_a, "topic_b":hrs_b},
+                            "chart_weekly":    {"labels":["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "topic_a":_weekly_totals(_ca), "topic_b":_weekly_totals(_cb)},
+                            "keywords_a":      _ia.get("keyword_split",{}),
+                            "keywords_b":      _ib.get("keyword_split",{}),
+                            "chart_emotions":  {"labels":emo_labels_cap, "topic_a":[round(map_a.get(e.lower(),0.0),4) for e in emo_labels_cap], "topic_b":[round(map_b.get(e.lower(),0.0),4) for e in emo_labels_cap]},
+                            "chart_momentum":  {"labels":_mo, "topic_a":_va_mo, "topic_b":_vb_mo},
+                            "chart_cumulative":{"labels":_cu, "topic_a":_va_cu, "topic_b":_vb_cu},
+                            "chart_text_length":{"labels":["Positive","Negative"], "topic_a":_mda.get("text_length",[0,0]), "topic_b":_mdb.get("text_length",[0,0])},
+                        }
+
+                    cmp_overall = _build_cmp_from_cache("90")
+                    # Build reddit/youtube variants from their respective source keys
+                    def _build_cmp_source(source_key):
+                        _twa = (_ra.get("time_windows") or {}).get("90", {})
+                        _twb = (_rb.get("time_windows") or {}).get("90", {})
+                        _ca = _twa.get(source_key, {}); _cb = _twb.get(source_key, {})
+                        _ia = _twa.get(f"insights_{source_key}", {}); _ib = _twb.get(f"insights_{source_key}", {})
+                        if not (_ca and _ia):
+                            return None
+                        def _al(key):
+                            a = _ca.get(key, {}); b = _cb.get(key, {})
+                            return _align_timeseries(a.get("labels",[]), a.get("values",[]),
+                                                     b.get("labels",[]), b.get("values",[]))
+                        _tl, _va_tl, _vb_tl = _align_timeseries(
+                            _ca.get("chart2_sentiment_timeline",{}).get("labels",[]),
+                            _ca.get("chart2_sentiment_timeline",{}).get("datasets",{}).get("Positive",[]),
+                            _cb.get("chart2_sentiment_timeline",{}).get("labels",[]),
+                            _cb.get("chart2_sentiment_timeline",{}).get("datasets",{}).get("Positive",[]),
+                        )
+                        _vl, _va_vl, _vb_vl = _al("chart6_sentiment_volatility")
+                        _mo, _va_mo, _vb_mo = _align_timeseries(
+                            _ia.get("sentiment_momentum",{}).get("labels",[]),
+                            _ia.get("sentiment_momentum",{}).get("values",[]),
+                            _ib.get("sentiment_momentum",{}).get("labels",[]),
+                            _ib.get("sentiment_momentum",{}).get("values",[]),
+                        )
+                        _cu, _va_cu, _vb_cu = _al("chart14_cumulative_posts")
+                        def _weekly_totals(tw_all):
+                            ds = tw_all.get("chart15_sentiment_by_day",{}).get("datasets",{})
+                            pos = ds.get("Positive",[0]*7); neg = ds.get("Negative",[0]*7); neu = ds.get("Neutral",[0]*7)
+                            return [p+n+u for p,n,u in zip(pos,neg,neu)]
+                        emo_a = _ia.get("emotion_distribution",{}); emo_b = _ib.get("emotion_distribution",{})
+                        map_a = dict(zip(emo_a.get("labels",[]), emo_a.get("values",[])))
+                        map_b = dict(zip(emo_b.get("labels",[]), emo_b.get("values",[])))
+                        emo_labels_cap = [e.capitalize() for e in EMOTION_LABELS]
+                        tka = _ia.get("takeaways",{}); tkb = _ib.get("takeaways",{})
+                        hrs_a = _ca.get("chart10_volume_by_hour",{}).get("values",[0]*24)
+                        hrs_b = _cb.get("chart10_volume_by_hour",{}).get("values",[0]*24)
+                        up_a = (_ca.get("chart3_avg_upvotes_sentiment",{}).get("values") or [0,0])[:2]
+                        up_b = (_cb.get("chart3_avg_upvotes_sentiment",{}).get("values") or [0,0])[:2]
+                        return {
+                            "topic_a": {**info_a},
+                            "topic_b": {**info_b},
+                            "chart_split":     {"labels":["Positive","Negative"], "topic_a":[tka.get("pos_pct",0),tka.get("neg_pct",0)], "topic_b":[tkb.get("pos_pct",0),tkb.get("neg_pct",0)]},
+                            "chart_upvotes":   {"labels":["Positive","Negative"], "topic_a":up_a, "topic_b":up_b},
+                            "chart_timeline":  {"labels":_tl, "topic_a":_va_tl, "topic_b":_vb_tl},
+                            "chart_volatility":{"labels":_vl, "topic_a":_va_vl, "topic_b":_vb_vl},
+                            "chart_hours":     {"labels":[f'{h:02d}:00' for h in range(24)], "topic_a":hrs_a, "topic_b":hrs_b},
+                            "chart_weekly":    {"labels":["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "topic_a":_weekly_totals(_ca), "topic_b":_weekly_totals(_cb)},
+                            "keywords_a":      _ia.get("keyword_split",{}),
+                            "keywords_b":      _ib.get("keyword_split",{}),
+                            "chart_emotions":  {"labels":emo_labels_cap, "topic_a":[round(map_a.get(e.lower(),0.0),4) for e in emo_labels_cap], "topic_b":[round(map_b.get(e.lower(),0.0),4) for e in emo_labels_cap]},
+                            "chart_momentum":  {"labels":_mo, "topic_a":_va_mo, "topic_b":_vb_mo},
+                            "chart_cumulative":{"labels":_cu, "topic_a":_va_cu, "topic_b":_vb_cu},
+                            "chart_text_length":{"labels":["Positive","Negative"], "topic_a":_mda.get("text_length",[0,0]), "topic_b":_mdb.get("text_length",[0,0])},
+                        }
+
+                    if cmp_overall:
+                        cmp_reddit  = _build_cmp_source("reddit")
+                        cmp_youtube = _build_cmp_source("youtube")
+                        comparison_data = {"overall": cmp_overall, "reddit": cmp_reddit, "youtube": cmp_youtube}
+                        _comp_hit = True
+                        print(f"[compare] Cache hit for {topic_a_name} vs {topic_b_name}")
+                except Exception as _e:
+                    print(f"[compare] Cache miss: {_e}")
+
+                if not _comp_hit:
+                    # Fallback: live comment fetch
+                    df_a, info_a = load_topic_for_compare(topic_a_name)
+                    df_b, info_b = load_topic_for_compare(topic_b_name)
+                    if df_a is not None and df_b is not None:
+                        from app.utils.comparator import build_comparison_data
+                        def _src(df, s):
+                            if 'source_type' in df.columns:
+                                sub = df[df['source_type'] == s].copy()
+                                return sub if not sub.empty else pd.DataFrame(columns=df.columns)
+                            return pd.DataFrame()
+                        df_a_r, df_b_r = _src(df_a,'reddit'),  _src(df_b,'reddit')
+                        df_a_y, df_b_y = _src(df_a,'youtube'), _src(df_b,'youtube')
+                        cmp_reddit  = build_comparison_data(df_a_r,info_a,df_b_r,info_b) if not (df_a_r.empty and df_b_r.empty) else None
+                        cmp_youtube = build_comparison_data(df_a_y,info_a,df_b_y,info_b) if not (df_a_y.empty and df_b_y.empty) else None
+                        cmp_overall = build_comparison_data(df_a,info_a,df_b,info_b)
+                        comparison_data = {"overall": cmp_overall, "reddit": cmp_reddit, "youtube": cmp_youtube}
+
+                if comparison_data:
+                    # Gemini AI overviews (one call using overall data)
+                    try:
+                        from app.utils.gemini_insights import get_compare_insights
+                        gemini_compare = get_compare_insights(comparison_data.get("overall"), topic_a_name, topic_b_name)
+                    except Exception as e:
+                        print(f"[compare] Gemini error: {e}")
+                        gemini_compare = {}
             else:
-                if df_a is None:
+                if not topic_id_a:
                     flash(f"Could not load data for '{topic_a_name}'. Run a full analysis first.")
-                if df_b is None:
+                if not topic_id_b:
                     flash(f"Could not load data for '{topic_b_name}'. Run a full analysis first.")
 
     return render_template(
@@ -1093,6 +1439,75 @@ def notifications():
     )
 
 
+@main_bp.route("/api/notifications")
+def api_notifications():
+    """JSON endpoint for the notification side panel."""
+    from datetime import date, timedelta
+    from flask import jsonify
+
+    user_data = session.get("user")
+    user = User.from_dict(user_data) if user_data else None
+
+    SHIFT_THRESHOLD = 10
+    shifts = []
+    try:
+        cutoff = (date.today() - timedelta(days=30)).isoformat()
+        topics_res = admin_supabase.table("topics").select("id,name").is_("user_id", "null").execute()
+        topics_list = topics_res.data or []
+        if topics_list:
+            topic_ids = [t["id"] for t in topics_list]
+            snaps_res = admin_supabase.table("daily_snapshots") \
+                .select("topic_id,snapshot_date,psi_rating") \
+                .in_("topic_id", topic_ids) \
+                .gte("snapshot_date", cutoff) \
+                .order("snapshot_date") \
+                .execute()
+            id_to_name = {t["id"]: t["name"] for t in topics_list}
+            by_topic = {}
+            for s in (snaps_res.data or []):
+                by_topic.setdefault(s["topic_id"], []).append(s)
+            for tid, rows in by_topic.items():
+                psi = [round(r["psi_rating"] or 0, 1) for r in rows]
+                if len(psi) < 2:
+                    continue
+                day_delta = psi[-1] - psi[-2]
+                if abs(day_delta) >= SHIFT_THRESHOLD:
+                    shifts.append({
+                        "name": id_to_name.get(tid, ""),
+                        "delta": round(day_delta, 1),
+                        "direction": "up" if day_delta > 0 else "down",
+                        "date": rows[-1]["snapshot_date"],
+                        "latest_psi": round(psi[-1], 1),
+                    })
+        shifts.sort(key=lambda x: abs(x["delta"]), reverse=True)
+    except Exception as e:
+        print(f"[api/notifications] shifts error: {e}")
+
+    completed_scans = []
+    if user:
+        try:
+            res = admin_supabase.table("topics") \
+                .select("id,name,created_at") \
+                .eq("user_id", user.get_user_id()) \
+                .order("created_at", desc=True) \
+                .execute()
+            for t in (res.data or []):
+                snap = admin_supabase.table("daily_snapshots") \
+                    .select("snapshot_date,psi_rating") \
+                    .eq("topic_id", t["id"]) \
+                    .order("snapshot_date", desc=True).limit(1).execute()
+                if snap.data:
+                    completed_scans.append({
+                        "name": t["name"],
+                        "completed_date": snap.data[0]["snapshot_date"],
+                        "psi_rating": round(snap.data[0]["psi_rating"] or 0, 1),
+                    })
+        except Exception as e:
+            print(f"[api/notifications] scans error: {e}")
+
+    return jsonify({"shifts": shifts, "completed_scans": completed_scans})
+
+
 @main_bp.route("/history")
 def history():
     user_data = session.get("user")
@@ -1140,6 +1555,18 @@ def history():
 def get_fetch_progress():
     from app.utils.fetcher import fetch_progress
     return jsonify(fetch_progress)
+
+
+@main_bp.route("/api/topic-image")
+def api_topic_image():
+    """Return a Wikipedia thumbnail URL for any topic name. Cached in browser sessionStorage."""
+    topic = request.args.get("topic", "").strip()
+    if not topic:
+        return jsonify({"url": None})
+    from app.utils.topic_image import get_topic_image_url
+    url = get_topic_image_url(topic)
+    return jsonify({"url": url})
+
 
 # --- ADMIN API ROUTES FOR TOPICS ---
 

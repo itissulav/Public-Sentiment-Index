@@ -120,11 +120,11 @@
 
   <!-- 2. Featured topics grid -->
   {% set presets = [
-    ("Donald Trump",      "donaldtrump.png"),
-    ("The Boys",          "theboys.png"),
-    ("Avengers Doomsday", "avengersdoomsday.png"),
-    ("Macbook Neo",       "macbookneo.png"),
-    ("America vs Iran",   "americavsiran.png")
+    ("Donald Trump",  "donaldtrump.png"),
+    ("Elon Musk",     "elonmusk.png"),
+    ("Gaza Conflict", "gazaconflict.png"),
+    ("AI Technology", "aitechnology.png"),
+    ("Climate Change","climatechange.png")
   ] %}
   <div class="tl-featured-section">
     <div class="tl-featured-header">
@@ -138,8 +138,8 @@
       {% for pt, img in presets %}
       <form method="POST" action="{{ url_for('main.trends') }}" class="tl-card-form">
         <input type="hidden" name="topic" value="{{ pt }}">
-        <button type="submit" class="tl-topic-card {{ 'active' if current_topic == pt else '' }}">
-          <div class="tl-card-img" style="background-image: url('{{ url_for('static', filename='images/' ~ img) }}');"></div>
+        <button type="submit" class="tl-topic-card {{ 'active' if current_topic == pt else '' }}" data-topic="{{ pt }}">
+          <div class="tl-card-img"></div>
           <div class="tl-card-overlay"></div>
           <span class="tl-card-instant-badge">INSTANT</span>
           <div class="tl-card-body">
@@ -309,6 +309,9 @@
 
     <!-- Left: topic name + meta -->
     <div class="ah-left">
+      <div class="ah-topic-img-wrap">
+        <img id="analysisTopicThumb" class="ah-topic-thumb" src="" alt="{{ current_topic }}" style="display:none;">
+      </div>
       <span class="analysis-label">Sentiment Report</span>
       <h2 class="analysis-topic-name">{{ current_topic }}</h2>
       {% if topic_info %}
@@ -2348,7 +2351,7 @@ document.addEventListener('DOMContentLoaded', function () {
   {% endif %}
 
   // Progress polling on search form submit
-  const PREDEFINED_TOPIC_NAMES = ['Donald Trump', 'The Boys', 'Avengers Doomsday', 'Macbook Neo', 'America vs Iran'];
+  const PREDEFINED_TOPIC_NAMES = ['Donald Trump', 'Elon Musk', 'Gaza Conflict', 'AI Technology', 'Climate Change'];
   const searchForm = document.getElementById('searchForm');
   if (searchForm) {
     let pollInterval;
@@ -2511,11 +2514,11 @@ document.addEventListener('DOMContentLoaded', function () {
   let activeIdx = -1;
 
   const FEATURED_IMG = {
-    'Donald Trump':      'donaldtrump.png',
-    'The Boys':          'theboys.png',
-    'Avengers Doomsday': 'avengersdoomsday.png',
-    'Macbook Neo':       'macbookneo.png',
-    'America vs Iran':   'americavsiran.png',
+    'Donald Trump':  'donaldtrump.png',
+    'Elon Musk':     'elonmusk.png',
+    'Gaza Conflict': 'gazaconflict.png',
+    'AI Technology': 'aitechnology.png',
+    'Climate Change':'climatechange.png',
   };
 
   function getFiltered(q) {
@@ -2601,6 +2604,47 @@ document.addEventListener('DOMContentLoaded', function () {
   input.addEventListener('blur', () => {
     setTimeout(() => { dropdown.classList.remove('open'); activeIdx = -1; }, 150);
   });
+})();
+</script>
+
+<script>
+// ── Topic image loader ────────────────────────────────────────
+// Fetches Wikipedia thumbnail for any topic and caches in sessionStorage.
+(function () {
+  async function loadTopicImage(topicName, onLoad) {
+    const key = 'topicImg_' + topicName;
+    const cached = sessionStorage.getItem(key);
+    if (cached !== null) { if (cached) onLoad(cached); return; }
+    try {
+      const res  = await fetch('/api/topic-image?topic=' + encodeURIComponent(topicName));
+      const data = await res.json();
+      const url  = data.url || '';
+      sessionStorage.setItem(key, url);
+      if (url) onLoad(url);
+    } catch (e) { sessionStorage.setItem(key, ''); }
+  }
+
+  // ── Preset topic cards ──
+  document.querySelectorAll('.tl-topic-card[data-topic]').forEach(function (card) {
+    var topic  = card.dataset.topic;
+    var imgDiv = card.querySelector('.tl-card-img');
+    if (!imgDiv) return;
+    loadTopicImage(topic, function (url) {
+      imgDiv.style.backgroundImage = "url('" + url + "')";
+    });
+  });
+
+  // ── Analysis header thumbnail ──
+  var thumb = document.getElementById('analysisTopicThumb');
+  if (thumb) {
+    var topicName = thumb.alt;
+    if (topicName) {
+      loadTopicImage(topicName, function (url) {
+        thumb.src = url;
+        thumb.style.display = 'block';
+      });
+    }
+  }
 })();
 </script>
 {% endblock %}

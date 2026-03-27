@@ -70,6 +70,7 @@ def get_reddit_comments(query, limit_posts=100, max_comments=5000, subreddit_nam
 
         post_count += 1
         fetch_progress["current"] = post_count
+        fetch_progress["message"] = f"Fetching Reddit posts... (post {post_count}/{actual_posts}, {len(comment_data)} comments)"
 
         # Expand "load more" links — limit=10 fetches up to 10 "more" stubs
         # giving a good breadth of replies without blowing up on huge threads
