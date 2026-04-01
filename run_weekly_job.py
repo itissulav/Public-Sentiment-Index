@@ -22,10 +22,10 @@ load_dotenv()
 
 PREDEFINED_TOPICS = [
     "Donald Trump",
-    "The Boys",
-    "Avengers Doomsday",
-    "Macbook Neo",
-    "America vs Iran",
+    "Elon Musk",
+    "Gaza Conflict",
+    "AI Technology",
+    "Climate Change",
 ]
 
 REDDIT_TARGET  = 500   # max comments per topic from Reddit
