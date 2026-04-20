@@ -1,8 +1,15 @@
 """
 app/api/wiki.py
 ===============
-Wikipedia thumbnail fetching.
+Wikipedia image fetching — two approaches, both free, no auth required.
+
+  fetch_wiki_image(topic)       — uses Wikipedia query API (requests library)
+  get_topic_image_url(topic)    — uses Wikipedia REST summary API (urllib)
 """
+
+import json
+import urllib.request
+import urllib.parse
 
 
 def fetch_wiki_image(topic: str) -> str | None:
@@ -28,6 +35,29 @@ def fetch_wiki_image(topic: str) -> str | None:
             url = page.get("thumbnail", {}).get("source")
             if url:
                 return url
+    except Exception:
+        pass
+    return None
+
+
+def get_topic_image_url(topic_name: str) -> str | None:
+    """
+    Return the best available Wikipedia thumbnail URL for `topic_name`.
+    Prefers originalimage (higher res), falls back to thumbnail.
+    Returns None if the topic isn't found or on any network error.
+    """
+    try:
+        encoded = urllib.parse.quote(topic_name, safe="")
+        url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{encoded}"
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "PublicSentimentIndex/1.0 (educational project)"},
+        )
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            img = data.get("originalimage") or data.get("thumbnail")
+            if img and img.get("source"):
+                return img["source"]
     except Exception:
         pass
     return None

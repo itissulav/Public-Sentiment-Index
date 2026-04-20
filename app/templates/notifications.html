@@ -44,7 +44,7 @@
         </div>
         <div class="notif-meta">PSI now {{ s.latest_psi }} &middot; {{ s.date }}</div>
       </div>
-      <a href="{{ url_for('main.pulse') }}" class="notif-action">View Pulse →</a>
+      <a href="{{ url_for('pulse.pulse') }}" class="notif-action">View Pulse →</a>
     </div>
     {% endfor %}
   </div>
@@ -59,7 +59,7 @@
   </div>
   <div class="notif-list">
     {% for s in completed_scans %}
-    <form method="POST" action="{{ url_for('main.trends') }}" style="display:contents">
+    <form method="POST" action="{{ url_for('trends.trends') }}" style="display:contents">
       <input type="hidden" name="topic" value="{{ s.name }}">
       <div class="notif-row notif-scan">
         <div class="notif-icon notif-icon-done">

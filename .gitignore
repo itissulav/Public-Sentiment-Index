@@ -15,9 +15,12 @@ __pycache__/
 *-key.json
 *credentials*.json
 
-# IDE
+# IDE / Editor
 .idea/
 .vscode/
+.vs/
+*.swp
+*.swo
 
 # OS
 .DS_Store
@@ -34,3 +37,21 @@ app/static/analysed/
 
 # Dev-only files: tests, debug logs, planning docs, seed scripts
 _dev/
+
+# Test / debug artifacts
+.pytest_cache/
+*.pytest_cache/
+htmlcov/
+.coverage
+report.html
+
+# Selenium / browser drivers
+msedgedriver.exe
+chromedriver.exe
+geckodriver.exe
+
+# Debug scripts & output
+debug_form.py
+submit_form.py
+form_data_raw.txt
+response_debug.html

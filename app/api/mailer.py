@@ -1,4 +1,4 @@
-# app/utils/mailer.py
+# app/api/mailer.py
 # Sends transactional emails via Resend (resend.com — free tier, no SMTP needed).
 # Set RESEND_API_KEY in .env  |  pip install resend
 

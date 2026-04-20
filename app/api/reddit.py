@@ -8,7 +8,7 @@ import os
 import praw
 from dotenv import load_dotenv
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 from tqdm import tqdm
 
 load_dotenv()
@@ -52,9 +52,31 @@ def get_reddit_comments(query, limit_posts=100, max_comments=5000, subreddit_nam
     seen_texts = set()
     post_count = 0
 
-    print(f"Fetching up to {limit_posts} posts for '{query}' from r/{subreddit_name}...")
+    # Map days_back → PRAW time_filter bucket (server-side prefilter)
+    if days_back <= 1:
+        time_filter = "day"
+    elif days_back <= 7:
+        time_filter = "week"
+    elif days_back <= 31:
+        time_filter = "month"
+    elif days_back <= 365:
+        time_filter = "year"
+    else:
+        time_filter = "all"
+
+    # Incremental runs want newest-first so we can short-circuit on old posts;
+    # fresh 90-day scans stick with relevance ranking.
+    sort_mode = "new" if days_back < 90 else "relevance"
+
+    print(f"Fetching up to {limit_posts} posts for '{query}' from r/{subreddit_name} "
+          f"(sort={sort_mode}, time_filter={time_filter}, days_back={days_back})...")
     try:
-        posts = list(subreddit.search(query, sort="relevance", limit=limit_posts))
+        posts = list(subreddit.search(
+            query,
+            sort=sort_mode,
+            time_filter=time_filter,
+            limit=limit_posts,
+        ))
     except Exception as e:
         raise RedditAPIError(f"Reddit search failed for '{query}': {e}") from e
 
@@ -63,10 +85,19 @@ def get_reddit_comments(query, limit_posts=100, max_comments=5000, subreddit_nam
     fetch_progress["message"] = "Processing comments from posts..."
 
     cutoff = datetime.utcnow()
+    submission_cutoff = cutoff - timedelta(days=days_back)
 
     for submission in tqdm(posts, desc="Processing posts"):
         if len(comment_data) >= max_comments:
             break
+
+        # Skip posts created before the cutoff. In sort="new" mode we can
+        # short-circuit — everything after is only going to be older.
+        submission_date = datetime.utcfromtimestamp(submission.created_utc)
+        if submission_date < submission_cutoff:
+            if sort_mode == "new":
+                break
+            continue
 
         post_count += 1
         fetch_progress["current"] = post_count

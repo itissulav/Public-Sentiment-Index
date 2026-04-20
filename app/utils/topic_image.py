@@ -1,40 +1,38 @@
 """
-topic_image.py
-==============
-Fetches a representative image URL for any topic via the Wikipedia REST API.
+app/utils/topic_image.py
+========================
+Resolves a topic name to a PNG filename under app/static/images/.
 
-Free, no API key required. The Wikipedia summary endpoint returns a thumbnail
-URL for virtually any notable person, event, or concept.
+Lookup order:
+  1. PREDEFINED_TOPIC_IMAGES dict (explicit override, from constants.py)
+  2. Slug of topic name — e.g. "The Boys" → "theboys.png" (admin convention)
+  3. Default placeholder image
 
-Used by /api/topic-image to power dynamic topic imagery in the frontend.
+No DB schema change required. Admin simply drops a matching {slug}.png into
+app/static/images/ when they add a new predefined topic.
 """
 
-import json
-import urllib.request
-import urllib.parse
+import os
+import re
+from app.utils.constants import PREDEFINED_TOPIC_IMAGES
 
 
-def get_topic_image_url(topic_name: str) -> str | None:
-    """
-    Return the best available Wikipedia thumbnail URL for `topic_name`.
-    Returns None if the topic isn't found or on any network error.
+_STATIC_IMAGES_DIR = os.path.join(os.path.dirname(__file__), "..", "static", "images")
+_DEFAULT_IMAGE     = "placeholder-topic.png"
 
-    Wikipedia thumbnail URLs are hotlink-friendly and serve directly from
-    Wikimedia CDN — no proxy needed.
-    """
-    try:
-        encoded = urllib.parse.quote(topic_name, safe="")
-        url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{encoded}"
-        req = urllib.request.Request(
-            url,
-            headers={"User-Agent": "PublicSentimentIndex/1.0 (educational project)"},
-        )
-        with urllib.request.urlopen(req, timeout=4) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            # Prefer originalimage (higher res) then fall back to thumbnail
-            img = data.get("originalimage") or data.get("thumbnail")
-            if img and img.get("source"):
-                return img["source"]
-    except Exception:
-        pass
-    return None
+
+def _slug(name: str) -> str:
+    """Lowercase + strip non-alphanumeric — matches PREDEFINED_TOPIC_IMAGES keys."""
+    return re.sub(r"[^a-z0-9]", "", name.lower())
+
+
+def get_topic_image_filename(topic_name: str) -> str:
+    """Return the filename (not full URL) under /static/images/ for a topic."""
+    if topic_name in PREDEFINED_TOPIC_IMAGES:
+        return PREDEFINED_TOPIC_IMAGES[topic_name]
+
+    candidate = f"{_slug(topic_name)}.png"
+    if os.path.exists(os.path.join(_STATIC_IMAGES_DIR, candidate)):
+        return candidate
+
+    return _DEFAULT_IMAGE

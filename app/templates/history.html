@@ -11,11 +11,11 @@
   <!-- Page Header -->
   <div class="history-header">
     <div class="history-header-left">
-      <a href="{{ url_for('main.home') }}" class="back-link">← Back to Dashboard</a>
+      <a href="{{ url_for('home.home') }}" class="back-link">← Back to Dashboard</a>
       <h1>Your Saved Scans</h1>
       <p>Every topic you have analysed is stored here. View the results or re-run a fresh analysis.</p>
     </div>
-    <a href="{{ url_for('main.trends') }}" class="btn-new-scan">+ New Scan</a>
+    <a href="{{ url_for('trends.trends') }}" class="btn-new-scan">+ New Scan</a>
   </div>
 
   <!-- Scan Grid -->
@@ -82,7 +82,7 @@
 
           <!-- Action Buttons -->
           <div class="scan-actions">
-            <form method="POST" action="{{ url_for('main.trends') }}" style="flex:1;" onsubmit="showHistoryLoader('Loading your analysis…')">
+            <form method="POST" action="{{ url_for('trends.trends') }}" style="flex:1;" onsubmit="showHistoryLoader('Loading your analysis…')">
               <input type="hidden" name="topic"    value="{{ scan.name }}">
               <input type="hidden" name="topic_id" value="{{ scan.id }}">
               <button type="submit" class="btn-view">
@@ -90,9 +90,11 @@
               </button>
             </form>
 
-            <form method="POST" action="{{ url_for('main.trends') }}" style="flex:1;"
-                  onsubmit="showHistoryLoader('Running fresh analysis…'); this.querySelector('button').textContent='Queuing…'; this.querySelector('button').disabled=true;">
-              <input type="hidden" name="topic" value="{{ scan.name }}">
+            <form method="POST" action="{{ url_for('trends.trends') }}" style="flex:1;"
+                  onsubmit="showHistoryLoader('Fetching new data…'); this.querySelector('button').textContent='Queuing…'; this.querySelector('button').disabled=true;">
+              <input type="hidden" name="topic"    value="{{ scan.name }}">
+              <input type="hidden" name="topic_id" value="{{ scan.id }}">
+              <input type="hidden" name="reanalyse" value="1">
               <button type="submit" class="btn-reanalyse">
                 Analyse Again
               </button>
@@ -110,7 +112,7 @@
     <div class="empty-icon">🔍</div>
     <h2>No saved scans yet</h2>
     <p>Run your first custom topic analysis and it will appear here.</p>
-    <a href="{{ url_for('main.trends') }}" class="btn-new-scan">Start Analysing</a>
+    <a href="{{ url_for('trends.trends') }}" class="btn-new-scan">Start Analysing</a>
   </div>
   {% endif %}
 

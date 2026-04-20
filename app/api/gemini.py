@@ -1,31 +1,18 @@
 """
-gemini_insights.py
-==================
-Generates plain-English 2-sentence descriptions for each "Deep Dive" chart
-using Gemini (Vertex AI preferred, AI Studio fallback).
+gemini.py
+=========
+All Gemini API calls for the PSI platform.
 
-Called once per analysis from compute_all_insights() and injected into the
-template as insights_*.gemini_insights.
+Provides:
+  Source discovery:
+    get_sources_for_topic(topic_name)  → {category, subreddits, youtube_queries, news_keywords}
 
-Returns a dict with keys:
-  summary           — 2-sentence overall sentiment summary for the topic
-  topic_context     — what this topic is and why people are talking about it now
-  psi_meaning       — plain-English meaning of the PSI score (below the gauge)
-  keyword_love      — 2-3 sentence synthesis of what people love (from real quotes)
-  keyword_criticise — 2-3 sentence synthesis of what people criticise (from real quotes)
-  viral_posts       — why the top-upvoted posts resonated and went viral
-  debate_summary    — summary of the main arguments/camps in the debate
-  engagement        — chart3: avg upvotes by sentiment
-  scatter           — chart4: positivity vs virality scatter
-  volatility        — chart6: daily sentiment volatility
-  pos_intensity     — chart8: positive confidence histogram
-  neg_intensity     — chart7: negative confidence histogram
-  score_dist        — chart13: score distribution / viral inequality
-  text_length       — chart12: comment length vs positivity
-  peak_hours        — chart10: volume by hour
-  weekly            — chart15: sentiment by day of week
-  cumulative        — chart14: cumulative discussion growth
-  community         — chart17: sentiment by subreddit / video
+  Insight generation:
+    get_deep_dive_insights(topic_name, insights, charts_data)  → dict
+    get_compare_insights(cmp_data, topic_a_name, topic_b_name) → dict
+    get_narrative_report(topic_name, insights, psi_rating, source_split) → str
+    get_opinion_clusters(topic_name, sampled_comments)          → list
+    ask_about_topic(question, topic_name, ...)                  → str
 """
 
 import os
@@ -35,7 +22,193 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-PROMPT_TEMPLATE = """
+# ──────────────────────────────────────────────────────────────────────────────
+# Shared client
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _make_gemini_client():
+    """Return (client, model_id) — Vertex AI only."""
+    project = os.getenv("GOOGLE_CLOUD_PROJECT")
+    if not project:
+        print("[gemini] GOOGLE_CLOUD_PROJECT not set — Gemini unavailable")
+        return None, None
+    try:
+        from google import genai as _genai
+        client = _genai.Client(
+            vertexai=True,
+            project=project,
+            location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"),
+        )
+        return client, "gemini-2.5-flash-lite"
+    except Exception as e:
+        print(f"[gemini] Vertex AI client init failed: {e}")
+        return None, None
+
+
+def _json_config():
+    """
+    Build the GenerateContentConfig that forces Gemini to emit valid JSON.
+    Imported lazily so a missing SDK doesn't break module import.
+    """
+    from google.genai import types as _genai_types
+    return _genai_types.GenerateContentConfig(response_mime_type="application/json")
+
+
+def _parse_gemini_json(raw: str, *, context: str):
+    """
+    Parse a Gemini response that should be JSON.
+
+    Strips optional markdown fences, then json.loads. On failure, logs the
+    raw text (truncated) under `context` and re-raises json.JSONDecodeError
+    so the caller's existing except-branch fires.
+    """
+    if raw is None:
+        raise json.JSONDecodeError("empty response", "", 0)
+    txt = raw.strip()
+    txt = re.sub(r"^```(?:json)?\s*", "", txt)
+    txt = re.sub(r"\s*```$", "", txt).strip()
+    try:
+        return json.loads(txt)
+    except json.JSONDecodeError as e:
+        print(f"[gemini] JSON parse error ({context}): {e} — raw: {txt[:400]}")
+        raise
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Source discovery
+# ──────────────────────────────────────────────────────────────────────────────
+
+SOURCES_PROMPT = """
+You are a data source analyst for a public sentiment platform. Your job is to find the BEST YouTube videos that contain meaningful audience discussion about "{topic}".
+
+CRITICAL RULES — read carefully before generating queries:
+1. NEVER use "unboxing" unless the topic is a physical consumer product (smartphone, laptop, gadget, headphones).
+2. NEVER use "hands on" unless the topic is a physical product you can hold.
+3. For TV shows, movies, anime, or any entertainment: use "review", "analysis", "explained", "reaction", "discussion", "season [X]", "episode breakdown".
+4. For politicians, political events, or international figures: ALWAYS prefer established news channels (CNN, BBC News, Sky News, Al Jazeera, MSNBC, Fox News) and political analysis channels. Use queries like "{topic} news", "{topic} analysis BBC", "{topic} CNN report".
+5. For sports: use "highlights", "analysis", "match review", "breakdown".
+6. Every single query MUST contain the exact topic name "{topic}" so YouTube results are exclusively about this topic — not toys, not unrelated products, not similar names.
+7. Be specific enough that an ambiguous name (e.g. "The Boys") cannot match unrelated content (toys, unboxing channels, etc.).
+8. ALL queries must target informative or opinionated content only — reviews, analysis, debates, documentaries, news reports. NEVER generate queries that could return toy unboxings, product demonstrations for unrelated products, or entertainment content unrelated to the topic.
+9. Do NOT generate queries that could return YouTube Shorts or live stream results.
+
+First, determine the topic type for "{topic}":
+- Is it a TV show? (e.g. The Boys, House of the Dragon, Severance)
+- Is it a movie? (e.g. Avengers Doomsday, Interstellar)
+- Is it a politician, political figure, or international personality? (e.g. Donald Trump, Joe Biden, Elon Musk)
+- Is it a physical tech product? (e.g. MacBook, iPhone, GPU)
+- Is it a geopolitical event? (e.g. America vs Iran, Russia Ukraine, Gaza Conflict)
+- Is it a sports event or team?
+- Other?
+
+Then return a JSON object with exactly these fields:
+{{
+  "category": "one of: politics | entertainment | tech | business | sport | general",
+  "subreddits": ["subredditname1", "subredditname2", "subredditname3"],
+  "youtube_queries": ["query1", "query2", "query3", "query4", "query5"],
+  "news_keywords": ["keyword1", "keyword2", "keyword3"]
+}}
+
+Rules:
+- subreddits: 3 to 5 most relevant communities (e.g. for The Boys: ["TheBoys", "television", "Superhero_Shows"]), no 'r/' prefix, no duplicates
+- youtube_queries: exactly 5 search queries, each MUST contain "{topic}".
+    Choose query templates based on topic type:
+    * TV shows / movies / anime → "{topic} review", "{topic} season analysis", "{topic} explained", "{topic} reaction", "{topic} finale discussion"
+    * Politicians / political figures / international personalities → "{topic} BBC News", "{topic} CNN analysis", "{topic} Sky News", "{topic} speech reaction", "{topic} Al Jazeera"
+    * Geopolitical events → "{topic} BBC News", "{topic} Al Jazeera", "{topic} analysis", "{topic} explained", "{topic} documentary"
+    * Physical tech products → "{topic} review", "{topic} unboxing", "{topic} hands on"
+    * Sports → "{topic} highlights", "{topic} match analysis", "{topic} breakdown"
+    * Creator-specific (queries 3-5 for non-political topics): combine topic with the 2-3 most relevant YouTubers who cover this topic type.
+      For tech products: MKBHD, Dave2D, Linus Tech Tips.
+      For movies/TV: Chris Stuckmann, YMS, Screen Junkies, Pitch Meeting.
+      For sports: ESPN, SkySports.
+      Format: "MKBHD {topic}" — always include the topic name first.
+- news_keywords: 2 to 4 keywords for searching news articles about this topic
+- Return ONLY valid JSON. No markdown, no code blocks, no explanation.
+"""
+
+
+def _basic_fallback(topic_name: str) -> dict:
+    """Derive minimal sources from the topic name when Gemini is unavailable."""
+    words = [w.lower() for w in topic_name.split() if len(w) >= 3]
+    subs = list(dict.fromkeys(words + ["all"]))[:4]
+    return {
+        "category": "general",
+        "subreddits": subs,
+        "youtube_queries": [
+            f"{topic_name} review",
+            f"{topic_name} discussion",
+        ],
+        "news_keywords": [topic_name],
+        "youtube_relevant": False,
+    }
+
+
+def get_sources_for_topic(topic_name: str) -> dict:
+    """
+    Query Gemini to get the best sources for a topic.
+    Returns a dict with category, subreddits, youtube_queries, news_keywords.
+    Falls back to safe defaults on any error.
+    """
+    client, model_id = _make_gemini_client()
+    if client is None:
+        print(f"[gemini] No credentials found — using fallback sources for '{topic_name}'")
+        return _basic_fallback(topic_name)
+
+    try:
+        import time
+
+        prompt = SOURCES_PROMPT.format(topic=topic_name)
+        response = None
+        for attempt in range(3):
+            try:
+                response = client.models.generate_content(
+                    model=model_id,
+                    contents=prompt,
+                    config=_json_config(),
+                )
+                break
+            except Exception as e:
+                err_str = str(e)
+                if "GenerateRequestsPerDayPerProjectPerModel" in err_str or \
+                   ("429" in err_str and "day" in err_str.lower()):
+                    print(f"[gemini] Daily quota exhausted for '{topic_name}' — using fallback sources")
+                    break
+                elif "429" in err_str and attempt < 2:
+                    wait = 15 * (attempt + 1)
+                    print(f"[gemini] Rate limited, retrying in {wait}s...")
+                    time.sleep(wait)
+                else:
+                    print(f"[gemini] API error for '{topic_name}': {e}")
+                    break
+
+        if response is None:
+            return _basic_fallback(topic_name)
+
+        result = _parse_gemini_json(response.text, context=f"sources for '{topic_name}'")
+
+        required = {"category", "subreddits", "youtube_queries", "news_keywords"}
+        if not required.issubset(result.keys()):
+            raise ValueError(f"Missing keys in Gemini response: {required - result.keys()}")
+
+        result["subreddits"] = [s.lstrip("r/").strip() for s in result["subreddits"]]
+
+        print(f"[gemini] Sources for '{topic_name}': {result}")
+        return result
+
+    except json.JSONDecodeError:
+        pass  # already logged by _parse_gemini_json
+    except Exception as e:
+        print(f"[gemini] Error getting sources for '{topic_name}': {e}")
+
+    return _basic_fallback(topic_name)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Deep-dive chart insights
+# ──────────────────────────────────────────────────────────────────────────────
+
+DEEP_DIVE_PROMPT = """
 You are a data analyst writing plain-English explanations for a public sentiment dashboard.
 The audience is non-technical: explain what the data means, not what the chart is.
 
@@ -120,16 +293,13 @@ def _build_charts_summary(charts_data: dict, insights: dict) -> dict:
     """Extract the most useful numbers from chart dicts for Gemini context."""
     summary = {}
 
-    # chart3: avg upvotes by sentiment
     c3 = charts_data.get("chart3_avg_upvotes_sentiment") or {}
     if c3.get("labels") and c3.get("values"):
         summary["engagement_avg_upvotes"] = dict(zip(c3["labels"], c3["values"]))
 
-    # chart4: scatter sample (just count points)
     c4 = charts_data.get("chart4_sentiment_vs_engagement") or {}
     summary["scatter_sample_size"] = len(c4.get("data", []))
 
-    # chart6: volatility — peak and average
     c6 = charts_data.get("chart6_sentiment_volatility") or {}
     if c6.get("values"):
         vals = [v for v in c6["values"] if v is not None]
@@ -139,7 +309,6 @@ def _build_charts_summary(charts_data: dict, insights: dict) -> dict:
             summary["volatility_peak"] = round(max(vals), 3)
             summary["volatility_avg"]  = round(sum(vals) / len(vals), 3)
 
-    # chart7/8: intensity histograms (% in highest bin)
     for key, chart_key in [("pos_intensity", "chart8_positive_intensity"),
                             ("neg_intensity", "chart7_negative_intensity")]:
         cx = charts_data.get(chart_key) or {}
@@ -148,7 +317,6 @@ def _build_charts_summary(charts_data: dict, insights: dict) -> dict:
             high_bin = cx["values"][-1]
             summary[f"{key}_high_bin_pct"] = round(high_bin / total * 100, 1)
 
-    # chart13: score distribution
     c13 = charts_data.get("chart13_score_distribution") or {}
     if c13.get("labels") and c13.get("values"):
         total = sum(c13["values"]) or 1
@@ -156,18 +324,15 @@ def _build_charts_summary(charts_data: dict, insights: dict) -> dict:
         summary["score_dist_low_bin_pct"] = round(first / total * 100, 1)
         summary["score_dist"] = dict(zip(c13["labels"], c13["values"]))
 
-    # chart12: scatter (just note it exists)
     c12 = charts_data.get("chart12_text_length_vs_sentiment") or {}
     summary["text_length_sample"] = len(c12.get("data", []))
 
-    # chart10: peak hour
     c10 = charts_data.get("chart10_volume_by_hour") or {}
     if c10.get("values"):
         peak_idx = c10["values"].index(max(c10["values"]))
         summary["peak_hour"] = (c10.get("labels") or [""])[peak_idx]
         summary["peak_hour_count"] = max(c10["values"])
 
-    # chart15: best/worst day
     c15 = charts_data.get("chart15_sentiment_by_day") or {}
     if c15.get("labels") and c15.get("datasets"):
         pos_per_day = c15["datasets"].get("Positive", [])
@@ -175,13 +340,11 @@ def _build_charts_summary(charts_data: dict, insights: dict) -> dict:
             peak_idx = pos_per_day.index(max(pos_per_day)) if max(pos_per_day) > 0 else 0
             summary["best_day"] = c15["labels"][peak_idx]
 
-    # chart14: growth direction
     c14 = charts_data.get("chart14_cumulative_posts") or {}
     if c14.get("values") and len(c14["values"]) >= 2:
         summary["total_comments_tracked"] = c14["values"][-1]
         summary["first_day"] = (c14.get("labels") or [""])[0]
 
-    # chart17: community breakdown — top and bottom community by positive %
     c17 = charts_data.get("chart17_community_breakdown") or {}
     if c17.get("labels") and c17.get("datasets", {}).get("Positive"):
         pos_arr = c17["datasets"]["Positive"]
@@ -194,7 +357,6 @@ def _build_charts_summary(charts_data: dict, insights: dict) -> dict:
             summary["most_negative_community"]  = labels[min_idx]
             summary["most_negative_pct"]        = pos_arr[min_idx]
 
-    # momentum direction from insights
     mom = (insights or {}).get("sentiment_momentum") or {}
     summary["momentum_direction"] = mom.get("direction", "unknown")
 
@@ -208,50 +370,33 @@ def get_deep_dive_insights(
 ) -> dict:
     """
     Call Gemini to generate 2-sentence descriptions for each Deep Dive chart.
-
-    Parameters
-    ----------
-    topic_name  : human-readable topic name
-    insights    : result of compute_all_insights() (for takeaways, momentum)
-    charts_data : result of get_all_charts_data() (for numeric chart values)
-
-    Returns
-    -------
-    dict with keys: summary, engagement, scatter, volatility, pos_intensity,
-                    neg_intensity, score_dist, text_length, peak_hours, weekly,
-                    cumulative, community
-    Empty strings for all keys on any error.
+    Returns dict with keys matching REQUIRED_KEYS. Empty strings on any error.
     """
-    from app.utils.gemini_sources import _make_gemini_client
-
     client, model_id = _make_gemini_client()
     if client is None:
-        print("[gemini_insights] No credentials — skipping deep dive descriptions")
+        print("[gemini] No credentials — skipping deep dive descriptions")
         return EMPTY_INSIGHTS.copy()
 
-    # Extract takeaways for context
     takeaways = (insights or {}).get("takeaways") or {}
     positive_pct = takeaways.get("pos_pct", 0)
     negative_pct = takeaways.get("neg_pct", 0)
     neutral_pct  = takeaways.get("neu_pct", 0)
     total_comments = takeaways.get("total", 0)
 
-    # Date range from momentum labels
     mom = (insights or {}).get("sentiment_momentum") or {}
     mom_labels = mom.get("labels", [])
     date_range = f"{mom_labels[0]} to {mom_labels[-1]}" if len(mom_labels) >= 2 else "unknown"
 
     charts_summary = _build_charts_summary(charts_data, insights)
-    charts_json = json.dumps(charts_summary, indent=2)[:3000]  # cap at 3KB
+    charts_json = json.dumps(charts_summary, indent=2)[:3000]
 
-    # Build keyword context from the same phrases/quotes shown to users
     keyword_split = (insights or {}).get("keyword_split", {})
     pos_kw = _build_keyword_context(keyword_split, "positive", max_items=5)
     neg_kw = _build_keyword_context(keyword_split, "negative", max_items=5)
-    positive_keywords_json  = json.dumps(pos_kw, indent=2) if pos_kw else "[]"
-    negative_keywords_json  = json.dumps(neg_kw, indent=2) if neg_kw else "[]"
+    positive_keywords_json = json.dumps(pos_kw, indent=2) if pos_kw else "[]"
+    negative_keywords_json = json.dumps(neg_kw, indent=2) if neg_kw else "[]"
 
-    prompt = PROMPT_TEMPLATE.format(
+    prompt = DEEP_DIVE_PROMPT.format(
         topic=topic_name or "this topic",
         total_comments=total_comments,
         date_range=date_range,
@@ -271,39 +416,33 @@ def get_deep_dive_insights(
                 response = client.models.generate_content(
                     model=model_id,
                     contents=prompt,
+                    config=_json_config(),
                 )
                 break
             except Exception as e:
                 err_str = str(e)
                 if "GenerateRequestsPerDayPerProjectPerModel" in err_str or \
                    ("429" in err_str and "day" in err_str.lower()):
-                    print(f"[gemini_insights] Daily quota exhausted — skipping descriptions")
+                    print("[gemini] Daily quota exhausted — skipping descriptions")
                     break
                 elif "429" in err_str and attempt < 2:
                     wait = 15 * (attempt + 1)
-                    print(f"[gemini_insights] Rate limited, retrying in {wait}s...")
+                    print(f"[gemini] Rate limited, retrying in {wait}s...")
                     time.sleep(wait)
                 else:
-                    print(f"[gemini_insights] API error: {e}")
+                    print(f"[gemini] API error: {e}")
                     break
 
         if response is None:
             return EMPTY_INSIGHTS.copy()
 
-        raw = response.text.strip()
-        raw = re.sub(r"^```(?:json)?\s*", "", raw)
-        raw = re.sub(r"\s*```$", "", raw)
-        raw = raw.strip()
-
-        result = json.loads(raw)
-
-        # Fill any missing keys with empty string rather than crashing
+        result = _parse_gemini_json(response.text, context="deep dive")
         return {k: str(result.get(k, "")) for k in REQUIRED_KEYS}
 
-    except json.JSONDecodeError as e:
-        print(f"[gemini_insights] JSON parse error: {e}")
+    except json.JSONDecodeError:
+        pass  # already logged by _parse_gemini_json
     except Exception as e:
-        print(f"[gemini_insights] Unexpected error: {e}")
+        print(f"[gemini] Unexpected error (deep dive): {e}")
 
     return EMPTY_INSIGHTS.copy()
 
@@ -369,14 +508,11 @@ EMPTY_COMPARE = {k: "" for k in COMPARE_KEYS}
 def get_compare_insights(cmp_data: dict, topic_a_name: str, topic_b_name: str) -> dict:
     """
     Generate Gemini AI overviews for the compare topics page.
-    Uses the overall (all-sources) comparison data to produce 8 insight strings.
     Returns empty strings on any error.
     """
-    from app.utils.gemini_sources import _make_gemini_client
-
     client, model_id = _make_gemini_client()
     if client is None:
-        print("[gemini_compare] No credentials — skipping compare insights")
+        print("[gemini] No credentials — skipping compare insights")
         return EMPTY_COMPARE.copy()
 
     if not cmp_data:
@@ -461,41 +597,39 @@ def get_compare_insights(cmp_data: dict, topic_a_name: str, topic_b_name: str) -
                 response = client.models.generate_content(
                     model=model_id,
                     contents=prompt,
+                    config=_json_config(),
                 )
                 break
             except Exception as e:
                 err_str = str(e)
                 if "GenerateRequestsPerDayPerProjectPerModel" in err_str or \
                    ("429" in err_str and "day" in err_str.lower()):
-                    print("[gemini_compare] Daily quota exhausted")
+                    print("[gemini] Daily quota exhausted (compare)")
                     break
                 elif "429" in err_str and attempt < 2:
                     wait = 15 * (attempt + 1)
-                    print(f"[gemini_compare] Rate limited, retrying in {wait}s...")
+                    print(f"[gemini] Rate limited, retrying in {wait}s...")
                     time.sleep(wait)
                 else:
-                    print(f"[gemini_compare] API error: {e}")
+                    print(f"[gemini] API error (compare): {e}")
                     break
 
         if response is None:
             return EMPTY_COMPARE.copy()
 
-        raw = response.text.strip()
-        raw = re.sub(r"^```(?:json)?\s*", "", raw)
-        raw = re.sub(r"\s*```$", "", raw)
-        result = json.loads(raw.strip())
+        result = _parse_gemini_json(response.text, context="compare")
         return {k: str(result.get(k, "")) for k in COMPARE_KEYS}
 
-    except json.JSONDecodeError as e:
-        print(f"[gemini_compare] JSON parse error: {e}")
+    except json.JSONDecodeError:
+        pass  # already logged by _parse_gemini_json
     except Exception as e:
-        print(f"[gemini_compare] Unexpected error: {e}")
+        print(f"[gemini] Unexpected error (compare): {e}")
 
     return EMPTY_COMPARE.copy()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# AI Narrative Report — journalist-style editorial summary
+# Narrative report
 # ──────────────────────────────────────────────────────────────────────────────
 
 NARRATIVE_PROMPT = """You are a data journalist writing a brief editorial analysis for a public sentiment platform.
@@ -543,16 +677,14 @@ def get_narrative_report(
     Generate a journalist-style 3-4 paragraph editorial about the topic.
     Returns markdown string. Falls back to "" on any error.
     """
-    from app.utils.gemini_sources import _make_gemini_client
-
     client, model_id = _make_gemini_client()
     if client is None:
         return ""
 
     takeaways = (insights or {}).get("takeaways") or {}
-    positive_pct  = takeaways.get("pos_pct", 0)
-    negative_pct  = takeaways.get("neg_pct", 0)
-    neutral_pct   = takeaways.get("neu_pct", 0)
+    positive_pct   = takeaways.get("pos_pct", 0)
+    negative_pct   = takeaways.get("neg_pct", 0)
+    neutral_pct    = takeaways.get("neu_pct", 0)
     total_comments = takeaways.get("total", 0)
     dominant_emotion = takeaways.get("dominant_emotion", "mixed")
 
@@ -589,12 +721,12 @@ def get_narrative_report(
         response = client.models.generate_content(model=model_id, contents=prompt)
         return response.text.strip()
     except Exception as e:
-        print(f"[gemini_narrative] Error: {e}")
+        print(f"[gemini] Error (narrative): {e}")
         return ""
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Opinion Clusters — audience segmentation
+# Opinion clusters
 # ──────────────────────────────────────────────────────────────────────────────
 
 CLUSTERS_PROMPT = """You are an audience analyst for a public sentiment platform.
@@ -628,8 +760,6 @@ def get_opinion_clusters(topic_name: str, sampled_comments: list) -> list:
     Returns list of dicts: [{label, pct, summary, quote}, ...]
     Falls back to [] on any error.
     """
-    from app.utils.gemini_sources import _make_gemini_client
-
     client, model_id = _make_gemini_client()
     if client is None:
         return []
@@ -637,7 +767,6 @@ def get_opinion_clusters(topic_name: str, sampled_comments: list) -> list:
     if not sampled_comments:
         return []
 
-    # Format comments for the prompt
     lines = []
     for c in sampled_comments[:120]:
         text = (c.get("text") or "")[:180].replace("\n", " ")
@@ -652,13 +781,13 @@ def get_opinion_clusters(topic_name: str, sampled_comments: list) -> list:
     )
 
     try:
-        response = client.models.generate_content(model=model_id, contents=prompt)
-        raw = response.text.strip()
-        raw = re.sub(r"^```(?:json)?\s*", "", raw)
-        raw = re.sub(r"\s*```$", "", raw)
-        clusters = json.loads(raw.strip())
+        response = client.models.generate_content(
+            model=model_id,
+            contents=prompt,
+            config=_json_config(),
+        )
+        clusters = _parse_gemini_json(response.text, context="clusters")
         if isinstance(clusters, list):
-            # Validate structure
             return [
                 {
                     "label":   str(c.get("label", ""))[:50],
@@ -668,14 +797,16 @@ def get_opinion_clusters(topic_name: str, sampled_comments: list) -> list:
                 }
                 for c in clusters if isinstance(c, dict)
             ]
+    except json.JSONDecodeError:
+        pass  # already logged by _parse_gemini_json
     except Exception as e:
-        print(f"[gemini_clusters] Error: {e}")
+        print(f"[gemini] Error (clusters): {e}")
 
     return []
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# "Ask Anything" — conversational Q&A about a topic
+# Ask anything — conversational Q&A
 # ──────────────────────────────────────────────────────────────────────────────
 
 ASK_SYSTEM_PROMPT = """You are an expert analyst for a public sentiment intelligence platform.
@@ -728,8 +859,6 @@ def ask_about_topic(
     Answer a free-form question about a topic using Gemini + real comment data.
     Returns a markdown-formatted answer string, or an error message on failure.
     """
-    from app.utils.gemini_sources import _make_gemini_client
-
     client, model_id = _make_gemini_client()
     if client is None:
         return "Gemini is currently unavailable. Please try again later."
@@ -745,12 +874,10 @@ def ask_about_topic(
     mom_labels = mom.get("labels", [])
     date_range = f"{mom_labels[0]} to {mom_labels[-1]}" if len(mom_labels) >= 2 else "recent period"
 
-    # Build keyword context
     keyword_split = (insights or {}).get("keyword_split", {})
     pos_kw = _build_keyword_context(keyword_split, "positive", max_items=6)
     neg_kw = _build_keyword_context(keyword_split, "negative", max_items=6)
 
-    # Format top comments
     def _fmt_comment(c):
         if not c:
             return "N/A"
@@ -762,7 +889,6 @@ def ask_about_topic(
     top_pos_str = _fmt_comment(top_positive[0] if top_positive else None)
     top_neg_str = _fmt_comment(top_negative[0] if top_negative else None)
 
-    # Format sampled comments (keep short)
     sample_lines = []
     for c in sampled_comments[:80]:
         text = (c.get("text") or "")[:200].replace("\n", " ")
@@ -771,7 +897,6 @@ def ask_about_topic(
         sample_lines.append(f"[{sentiment}/{source}] {text}")
     sampled_str = "\n".join(sample_lines) if sample_lines else "No comments available."
 
-    # Source split summary
     if source_split:
         reddit_pct = round(source_split.get("reddit", 0) * 100)
         yt_pct = round(source_split.get("youtube", 0) * 100)
@@ -809,5 +934,5 @@ def ask_about_topic(
         err_str = str(e)
         if "429" in err_str or "quota" in err_str.lower():
             return "Daily request limit reached. Please try again tomorrow."
-        print(f"[gemini_ask] Error: {e}")
-        return "Something went wrong. Please try again."
+        print(f"[gemini] Error (ask): {e}")
+        return "An error occurred while processing your question. Please try again."

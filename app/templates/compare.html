@@ -24,7 +24,7 @@
       <p class="cl-sub">Pick two topics to see how public sentiment differs across Reddit and YouTube — powered by AI.</p>
     </div>
 
-    <form method="POST" action="{{ url_for('main.compare') }}" id="compareForm" class="compare-form">
+    <form method="POST" action="{{ url_for('compare.compare') }}" id="compareForm" class="compare-form">
 
       <div class="picker-row">
 
@@ -375,4 +375,23 @@
      ============================================================ -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{{ url_for('static', filename='js/compare.js') }}"></script>
+
+<!-- Disable Compare button when both inputs match -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const inputA = document.getElementById('inputA');
+  const inputB = document.getElementById('inputB');
+  const compareBtn = document.getElementById('compareBtn');
+
+  function checkInputsMatch() {
+    const a = (inputA.value || '').trim().toLowerCase();
+    const b = (inputB.value || '').trim().toLowerCase();
+    compareBtn.disabled = a === b && a !== '';
+  }
+
+  inputA.addEventListener('input', checkInputsMatch);
+  inputB.addEventListener('input', checkInputsMatch);
+  checkInputsMatch(); // Initial check
+});
+</script>
 {% endblock %}

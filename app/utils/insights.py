@@ -399,7 +399,7 @@ def compute_all_insights(df, topic_name: str = "", charts_data: dict = None):
         # Generate Gemini chart descriptions (requires topic_name + charts_data)
         if topic_name and charts_data:
             try:
-                from app.utils.gemini_insights import get_deep_dive_insights
+                from app.api.gemini import get_deep_dive_insights
                 result['gemini_insights'] = get_deep_dive_insights(
                     topic_name, result, charts_data
                 )

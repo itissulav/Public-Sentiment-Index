@@ -114,9 +114,14 @@
 
     <!-- TAB 2: TOPICS -->
     <div id="tab-topics" class="panel tab-content" style="display: none;">
-      <div class="panel-header">
-        <h2>Predefined Sentiment Topics</h2>
-        <span style="color: var(--text-muted); font-size: 0.82rem;">{{ total_topics }} topic{{ 's' if total_topics != 1 }} · shared with all users</span>
+      <div class="panel-header" style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+        <div>
+          <h2>Predefined Sentiment Topics</h2>
+          <span style="color: var(--text-muted); font-size: 0.82rem;">{{ total_topics }} topic{{ 's' if total_topics != 1 }} · shared with all users</span>
+        </div>
+        <button type="button" class="btn-analyse" onclick="openTopicModal()" title="Add a new predefined topic — fetches 5k Reddit + 5k YouTube in the background">
+          <span class="analyse-icon">+</span> Add Topic
+        </button>
       </div>
       <div class="table-responsive">
         <table class="modern-table">
@@ -213,21 +218,27 @@
         <input type="text" id="topicName" name="topicName" class="form-input" placeholder="e.g. Kathmandu Infrastructure" required>
       </div>
       
-      <div class="form-group">
-        <label>Sources (Name of the source)</label>
+      <p style="color: var(--text-muted); font-size: 0.82rem; margin: -4px 0 16px 0;">
+        Sources &amp; subreddits are auto-discovered by Gemini once you submit —
+        no need to enter them manually. Analysis runs in the background
+        (5k Reddit + 5k YouTube comments).
+      </p>
+
+      <div class="form-group" style="display:none;">
+        <label>Sources (optional — auto-discovered if blank)</label>
         <div id="sourcesList" class="dynamic-list">
           <div class="dynamic-item">
-            <input type="text" name="sources[]" class="form-input" placeholder="e.g. Twitter" required>
+            <input type="text" name="sources[]" class="form-input" placeholder="e.g. Twitter">
             <button type="button" class="btn-add-item" onclick="addDynamicItem('sourcesList', 'sources[]', 'e.g. Facebook')">+</button>
           </div>
         </div>
       </div>
-      
-      <div class="form-group">
-        <label>Source Links (URLs)</label>
+
+      <div class="form-group" style="display:none;">
+        <label>Source Links (optional — auto-discovered if blank)</label>
         <div id="linksList" class="dynamic-list">
           <div class="dynamic-item">
-            <input type="url" name="sourceLinks[]" class="form-input" placeholder="https://..." required>
+            <input type="url" name="sourceLinks[]" class="form-input" placeholder="https://...">
             <button type="button" class="btn-add-item" onclick="addDynamicItem('linksList', 'sourceLinks[]', 'https://...')">+</button>
           </div>
         </div>
@@ -287,7 +298,7 @@ function addDynamicItem(listId, inputName, placeholderTxt) {
   const div = document.createElement('div');
   div.className = 'dynamic-item';
   div.innerHTML = `
-    <input type="${inputName.includes('Link') ? 'url' : 'text'}" name="${inputName}" class="form-input" placeholder="${placeholderTxt}" required>
+    <input type="${inputName.includes('Link') ? 'url' : 'text'}" name="${inputName}" class="form-input" placeholder="${placeholderTxt}">
     <button type="button" class="btn-remove-item" onclick="this.parentElement.remove()">-</button>
   `;
   list.appendChild(div);
@@ -297,7 +308,7 @@ function resetDynamicList(listId, inputName, placeholderTxt) {
   const list = document.getElementById(listId);
   list.innerHTML = `
     <div class="dynamic-item">
-      <input type="${inputName.includes('Link') ? 'url' : 'text'}" name="${inputName}" class="form-input" placeholder="${placeholderTxt}" required>
+      <input type="${inputName.includes('Link') ? 'url' : 'text'}" name="${inputName}" class="form-input" placeholder="${placeholderTxt}">
       <button type="button" class="btn-add-item" onclick="addDynamicItem('${listId}', '${inputName}', '${placeholderTxt}')">+</button>
     </div>
   `;

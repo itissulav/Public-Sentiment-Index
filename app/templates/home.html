@@ -25,15 +25,15 @@
       <div class="card-icon"><i data-lucide="trending-up"></i></div>
       <h3>Explore Trends</h3>
       <p>Search any topic and get a full sentiment breakdown powered by AI.</p>
-      <a href="{{ url_for('main.trends') }}" class="btn-glow-small mt-3">Go to Dashboard</a>
+      <a href="{{ url_for('trends.trends') }}" class="btn-glow-small mt-3">Go to Dashboard</a>
     </div>
     <div class="glass-card history-card">
       <div class="card-icon"><i data-lucide="clock-3"></i></div>
       <h3>Saved Scans</h3>
       <p>You have <strong style="color:#f5f0e8;">{{ saved_scan_count }}</strong> sentiment report{{ 's' if saved_scan_count != 1 else '' }} waiting.</p>
-      <a href="{{ url_for('main.history') }}" class="btn-outline mt-3">View History</a>
+      <a href="{{ url_for('history.history') }}" class="btn-outline mt-3">View History</a>
     </div>
-    <a href="{{ url_for('main.profile') }}" class="glass-card profile-card">
+    <a href="{{ url_for('profile.profile') }}" class="glass-card profile-card">
       <div class="profile-avatar">{{ user.get_first_name()[0] }}{{ user.get_last_name()[0] }}</div>
       <div class="profile-details">
         <h3>@{{ user.get_username() }}</h3>
@@ -46,22 +46,14 @@
   <div class="trends-preview-section">
     <div class="section-header-flex">
       <h2>Featured Topics</h2>
-      <a href="{{ url_for('main.trends') }}" class="view-all-link">Analyse Custom Topic →</a>
+      <a href="{{ url_for('trends.trends') }}" class="view-all-link">Analyse Custom Topic →</a>
     </div>
-
-    {% set img_map = {
-      "Donald Trump":  "donaldtrump.png",
-      "Elon Musk":     "elonmusk.png",
-      "Gaza Conflict": "gazaconflict.png",
-      "AI Technology": "aitechnology.png",
-      "Climate Change":"climatechange.png"
-    } %}
 
     <div class="trends-list">
       {% for topic in trending_topics %}
-        {% set img_name = img_map.get(topic.name, topic.name|replace(' ','')|lower + '.png') %}
+        {% set img_name = topic.image_filename or (topic.name|replace(' ','')|lower + '.png') %}
         {% set color_class = 'positive' if topic.sentiment == 'Positive' else ('negative' if topic.sentiment == 'Negative' else 'neutral') %}
-        <form method="POST" action="{{ url_for('main.trends') }}" style="display:contents;" onsubmit="showHomeLoader()">
+        <form method="POST" action="{{ url_for('trends.trends') }}" style="display:contents;" onsubmit="showHomeLoader()">
           <input type="hidden" name="topic" value="{{ topic.name }}">
           <button type="submit" class="trend-item">
             <div class="trend-item-bg" style="background-image:url('{{ url_for('static', filename='images/' ~ img_name) }}')"></div>
@@ -115,7 +107,7 @@
 
       <div class="hero-actions">
         <a href="{{ url_for('auth.register') }}" class="btn-glow">Start for free</a>
-        <a href="{{ url_for('main.about') }}" class="btn-outline-large">How it works</a>
+        <a href="{{ url_for('home.about') }}" class="btn-outline-large">How it works</a>
       </div>
 
       <div class="hero-stats-strip">

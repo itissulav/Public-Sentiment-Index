@@ -39,22 +39,30 @@ def get_predefined_topics():
         print("Error fetching predefined topics:", e)
         return 0, []
 
-def add_topic(topic_data):
+def add_topic(topic_data: dict):
+    """Insert a new predefined topic into the v2 topics table."""
     try:
-        # Fetch current max ID to implement auto-increment
-        max_id_resp = admin_supabase.table("Topic").select("id").order("id", desc=True).limit(1).execute()
-        max_id = max_id_resp.data[0]['id'] if max_id_resp.data else 0
-        topic_data['id'] = max_id + 1
-        
-        response = admin_supabase.table("Topic").insert(topic_data).execute()
+        name = (topic_data.get("name") or topic_data.get("TopicName") or "").strip()
+        if not name:
+            return None
+        response = admin_supabase.table("topics").insert({
+            "name":    name,
+            "user_id": None,   # NULL = predefined topic
+        }).execute()
         return response.data
     except Exception as e:
         print("Error adding topic:", e)
         return None
 
-def update_topic(topic_id, topic_data):
+def update_topic(topic_id: int, topic_data: dict):
+    """Update a predefined topic's name in the v2 topics table."""
     try:
-        response = admin_supabase.table("Topic").update(topic_data).eq("id", topic_id).execute()
+        name = (topic_data.get("name") or topic_data.get("TopicName") or "").strip()
+        if not name:
+            return None
+        response = admin_supabase.table("topics").update({
+            "name": name,
+        }).eq("id", topic_id).is_("user_id", "null").execute()
         return response.data
     except Exception as e:
         print("Error updating topic:", e)

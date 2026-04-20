@@ -31,7 +31,7 @@
     <aside class="sidebar" id="sidebar">
 
       <!-- Brand -->
-      <a href="{{ url_for('main.home') }}" class="sidebar-brand">
+      <a href="{{ url_for('home.home') }}" class="sidebar-brand">
         <div class="brand-mark">
           <i data-lucide="activity"></i>
         </div>
@@ -41,49 +41,49 @@
       <!-- Primary nav -->
       <nav class="sidebar-nav">
 
-        <a href="{{ url_for('main.home') }}"
-           class="sidebar-item {% if request.endpoint == 'main.home' %}active{% endif %}">
+        <a href="{{ url_for('home.home') }}"
+           class="sidebar-item {% if request.endpoint == 'home.home' %}active{% endif %}">
           <span class="item-icon"><i data-lucide="house"></i></span>
           <span class="item-label">Home</span>
         </a>
 
-        <a href="{{ url_for('main.about') }}"
-           class="sidebar-item {% if request.endpoint == 'main.about' %}active{% endif %}">
+        <a href="{{ url_for('home.about') }}"
+           class="sidebar-item {% if request.endpoint == 'home.about' %}active{% endif %}">
           <span class="item-icon"><i data-lucide="info"></i></span>
           <span class="item-label">About</span>
         </a>
 
         {% if user and user.get_role() | lower == 'admin' %}
-        <a href="{{ url_for('main.admindashboard') }}"
-           class="sidebar-item {% if request.endpoint == 'main.admindashboard' %}active{% endif %}">
+        <a href="{{ url_for('admin.admindashboard') }}"
+           class="sidebar-item {% if request.endpoint == 'admin.admindashboard' %}active{% endif %}">
           <span class="item-icon"><i data-lucide="layout-dashboard"></i></span>
           <span class="item-label">Dashboard</span>
         </a>
 
         {% else %}
-        <a href="{{ url_for('main.trends') }}"
-           class="sidebar-item {% if request.endpoint == 'main.trends' %}active{% endif %}">
+        <a href="{{ url_for('trends.trends') }}"
+           class="sidebar-item {% if request.endpoint == 'trends.trends' %}active{% endif %}">
           <span class="item-icon"><i data-lucide="bar-chart-2"></i></span>
           <span class="item-label">Trends</span>
         </a>
 
         {% if user %}
-        <a href="{{ url_for('main.compare') }}"
-           class="sidebar-item {% if request.endpoint == 'main.compare' %}active{% endif %}">
+        <a href="{{ url_for('compare.compare') }}"
+           class="sidebar-item {% if request.endpoint == 'compare.compare' %}active{% endif %}">
           <span class="item-icon"><i data-lucide="columns-2"></i></span>
           <span class="item-label">Compare</span>
         </a>
 
-        <a href="{{ url_for('main.pulse') }}"
-           class="sidebar-item {% if request.endpoint == 'main.pulse' %}active{% endif %}">
+        <a href="{{ url_for('pulse.pulse') }}"
+           class="sidebar-item {% if request.endpoint == 'pulse.pulse' %}active{% endif %}">
           <span class="item-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
           </span>
           <span class="item-label">Pulse</span>
         </a>
 
-        <a href="{{ url_for('main.history') }}"
-           class="sidebar-item {% if request.endpoint == 'main.history' %}active{% endif %}">
+        <a href="{{ url_for('history.history') }}"
+           class="sidebar-item {% if request.endpoint == 'history.history' %}active{% endif %}">
           <span class="item-icon"><i data-lucide="clock-3"></i></span>
           <span class="item-label">History</span>
         </a>
@@ -106,8 +106,8 @@
       <div class="sidebar-footer">
 
         {% if user %}
-        <a href="{{ url_for('main.profile') }}"
-           class="sidebar-item sidebar-profile {% if request.endpoint == 'main.profile' %}active{% endif %}">
+        <a href="{{ url_for('profile.profile') }}"
+           class="sidebar-item sidebar-profile {% if request.endpoint == 'profile.profile' %}active{% endif %}">
           <span class="item-icon">
             <div class="sidebar-avatar {% if user.get_role() | lower == 'admin' %}avatar-admin{% endif %}">
               {{ user.get_first_name()[0] | upper }}{{ user.get_last_name()[0] | upper }}

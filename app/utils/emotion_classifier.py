@@ -52,15 +52,15 @@ def classify_local(texts: list[str]) -> list[dict]:
     pipe = _get_local_classifier()
     # Truncate to 512 chars — model limit is 512 tokens, ~2 chars/token avg
     safe = [str(t)[:512] if t else "" for t in texts]
-    raw_results = pipe(safe, truncation=True, max_length=128, batch_size=16, top_k=None)
+    raw_results = pipe(safe, truncation=True, max_length=128, batch_size=64, top_k=None)
     return [_parse_result(r) for r in raw_results]
 
 
 # ── HuggingFace Inference API (daily cron — 200–500 comments/day) ─────────────
 
-def classify_api(texts: list[str], batch_size: int = 100) -> list[dict]:
+def classify_api(texts: list[str], batch_size: int = 200) -> list[dict]:
     """
-    Classify texts via HF Inference API.
+    Classify texts via HF Inference API — up to 3 batches concurrently.
     Returns same format as classify_local.
     Falls back to neutral on any API error.
     """
@@ -70,26 +70,23 @@ def classify_api(texts: list[str], batch_size: int = 100) -> list[dict]:
         return [_neutral_result() for _ in texts]
 
     headers = {"Authorization": f"Bearer {hf_key}"}
-    results = []
-    auth_failed = False
-    total_batches = (len(texts) + batch_size - 1) // batch_size
+
+    # Split into batches
+    batches = []
+    for i in range(0, len(texts), batch_size):
+        batches.append([str(t)[:512] if t else "" for t in texts[i:i + batch_size]])
+
+    total_batches = len(batches)
+    print(f"[emotion] Classifying {len(texts)} texts via API ({total_batches} batches)")
 
     try:
         from app.api.reddit import fetch_progress as _fp
     except Exception:
         _fp = None
 
-    for i in range(0, len(texts), batch_size):
-        batch = [str(t)[:512] if t else "" for t in texts[i:i + batch_size]]
-        batch_num = i // batch_size + 1
-        if _fp is not None:
-            _fp["message"] = f"Analysing sentiment... (batch {batch_num}/{total_batches})"
-
-        if auth_failed:
-            results.extend([_neutral_result() for _ in batch])
-            continue
-
-        success = False
+    def _classify_batch(batch_idx_and_texts):
+        """Classify a single batch via HF API with retry logic."""
+        batch_idx, batch = batch_idx_and_texts
 
         for attempt in range(4):
             try:
@@ -101,45 +98,56 @@ def classify_api(texts: list[str], batch_size: int = 100) -> list[dict]:
                 )
                 if resp.status_code == 200:
                     raw = resp.json()
-                    # HF may wrap the whole batch in a single outer list
                     if isinstance(raw, list) and len(raw) == 1 and isinstance(raw[0], list):
                         raw = raw[0]
-                    parsed = []
-                    for item in raw:
-                        if isinstance(item, list):
-                            parsed.append(_parse_result(item))
-                        else:
-                            parsed.append(_neutral_result())
-                    results.extend(parsed)
-                    success = True
-                    break
+                    return batch_idx, [
+                        _parse_result(item) if isinstance(item, list) else _neutral_result()
+                        for item in raw
+                    ]
                 elif resp.status_code == 503:
                     wait = 20 * (attempt + 1)
-                    print(f"[emotion] HF model loading (attempt {attempt+1}/4) — sleeping {wait}s")
+                    print(f"[emotion] HF model loading (batch {batch_idx}, attempt {attempt+1}/4) — sleeping {wait}s")
                     time.sleep(wait)
                 elif resp.status_code == 429:
-                    print(f"[emotion] HF rate limited (attempt {attempt+1}/4) — sleeping 30s")
-                    time.sleep(30)
+                    wait = 30 * (attempt + 1)
+                    print(f"[emotion] HF rate limited (batch {batch_idx}, attempt {attempt+1}/4) — sleeping {wait}s")
+                    time.sleep(wait)
+                elif resp.status_code == 401:
+                    print("[emotion] HF auth failed (401) — check HUGGINGFACE_API_KEY secret")
+                    break
                 else:
-                    if resp.status_code == 401:
-                        print("[emotion] HF auth failed (401) — check HUGGINGFACE_API_KEY secret")
-                        auth_failed = True
                     print(f"[emotion] HF error {resp.status_code}: {resp.text[:200]}")
                     break
             except requests.exceptions.Timeout:
                 wait = 15 * (attempt + 1)
-                print(f"[emotion] HF timeout (attempt {attempt+1}/4) — sleeping {wait}s then retrying")
+                print(f"[emotion] HF timeout (batch {batch_idx}, attempt {attempt+1}/4) — retrying in {wait}s")
                 time.sleep(wait)
             except Exception as e:
-                print(f"[emotion] Network error: {e}")
+                print(f"[emotion] Network error (batch {batch_idx}): {e}")
                 time.sleep(5)
 
-        if not success:
-            results.extend([_neutral_result() for _ in batch])
+        return batch_idx, [_neutral_result() for _ in batch]
 
-        time.sleep(0.5)  # throttle between batches on free tier
+    # Send up to 3 batches concurrently
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    results_by_idx = {}
+    completed = 0
 
-    return results
+    with ThreadPoolExecutor(max_workers=1) as ex:
+        futures = {}
+        for i, b in enumerate(batches):
+            futures[ex.submit(_classify_batch, (i, b))] = i
+            if i < len(batches) - 1:
+                time.sleep(0.5)  # Throttle between requests to avoid overwhelming HF API
+        for fut in as_completed(futures):
+            batch_idx, batch_results = fut.result()
+            results_by_idx[batch_idx] = batch_results
+            completed += 1
+            if _fp is not None:
+                _fp["message"] = f"Analysing sentiment... ({completed}/{total_batches} batches)"
+
+    # Reassemble in original order
+    return [r for i in range(total_batches) for r in results_by_idx.get(i, [])]
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────

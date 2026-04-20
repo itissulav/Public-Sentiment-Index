@@ -118,14 +118,7 @@
     </div>
   </div>
 
-  <!-- 2. Featured topics grid -->
-  {% set presets = [
-    ("Donald Trump",  "donaldtrump.png"),
-    ("Elon Musk",     "elonmusk.png"),
-    ("Gaza Conflict", "gazaconflict.png"),
-    ("AI Technology", "aitechnology.png"),
-    ("Climate Change","climatechange.png")
-  ] %}
+  <!-- 2. Featured topics grid — DB-driven via `featured_topics` (passed by controller) -->
   <div class="tl-featured-section">
     <div class="tl-featured-header">
       <p class="tl-featured-label">
@@ -135,15 +128,15 @@
       <span class="tl-instant-tag">Pre-analyzed · Instant</span>
     </div>
     <div class="tl-card-grid">
-      {% for pt, img in presets %}
-      <form method="POST" action="{{ url_for('main.trends') }}" class="tl-card-form">
-        <input type="hidden" name="topic" value="{{ pt }}">
-        <button type="submit" class="tl-topic-card {{ 'active' if current_topic == pt else '' }}" data-topic="{{ pt }}">
-          <div class="tl-card-img"></div>
+      {% for t in featured_topics %}
+      <form method="POST" action="{{ url_for('trends.trends') }}" class="tl-card-form">
+        <input type="hidden" name="topic" value="{{ t.name }}">
+        <button type="submit" class="tl-topic-card {{ 'active' if current_topic == t.name else '' }}" data-topic="{{ t.name }}" data-fallback-img="{{ url_for('static', filename='images/' ~ t.img) }}">
+          <div class="tl-card-img" style="background-image: url('{{ url_for('static', filename='images/' ~ t.img) }}');"></div>
           <div class="tl-card-overlay"></div>
           <span class="tl-card-instant-badge">INSTANT</span>
           <div class="tl-card-body">
-            <span class="tl-card-name">{{ pt }}</span>
+            <span class="tl-card-name">{{ t.name }}</span>
             <span class="tl-card-cta">View Sentiment Report &rarr;</span>
           </div>
         </button>
@@ -187,8 +180,9 @@
       </div>
 
       <div class="tl-custom-form">
+        {% if user %}
         <div class="trends-search-wrap">
-          <form method="POST" action="{{ url_for('main.trends') }}" class="topic-search-form" id="searchForm">
+          <form method="POST" action="{{ url_for('trends.trends') }}" class="topic-search-form" id="searchForm">
             <input type="text" name="topic" id="trendsSearchInput" placeholder="Bitcoin, Taylor Swift, Gaza…" required class="search-input"
                    autocomplete="off" value="{{ current_topic if current_topic and not is_featured else '' }}">
             <button type="submit" class="search-btn" id="analyzeBtn">Analyze</button>
@@ -199,7 +193,16 @@
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           <span>Takes <strong>5–10 minutes</strong> to scan &amp; analyse</span>
         </div>
-        <a href="{{ url_for('main.compare') }}" class="compare-link-btn">Compare two topics side by side &rarr;</a>
+        <a href="{{ url_for('compare.compare') }}" class="compare-link-btn">Compare two topics side by side &rarr;</a>
+        {% else %}
+        <div class="tl-custom-login-prompt">
+          <p>You need an account to run a custom analysis.</p>
+          <div class="tl-custom-login-actions">
+            <a href="{{ url_for('auth.register') }}" class="search-btn">Create free account</a>
+            <a href="{{ url_for('auth.login') }}" class="compare-link-btn">Sign in &rarr;</a>
+          </div>
+        </div>
+        {% endif %}
       </div>
 
     </div>
@@ -239,7 +242,7 @@
     <p class="job-note">
       This usually takes <strong>5 – 10 minutes</strong>. Results will be ready on this page.
     </p>
-    <a href="{{ url_for('main.home') }}" class="job-home-btn">← Back to Home</a>
+    <a href="{{ url_for('home.home') }}" class="job-home-btn">← Back to Home</a>
   </div>
 </div>
 
@@ -291,7 +294,7 @@
     This scan exists but has no comment data — the background analysis may have failed or is still running.
     Re-submit the topic to start a fresh analysis.
   </p>
-  <form method="POST" action="{{ url_for('main.trends') }}" style="margin:0;">
+  <form method="POST" action="{{ url_for('trends.trends') }}" style="margin:0;">
     <input type="hidden" name="topic" value="{{ current_topic }}">
     <button type="submit" style="padding:12px 28px; background:var(--accent); color:#fff; border:none; border-radius:4px; font-size:0.85rem; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; cursor:pointer;">
       Re-run Analysis
@@ -1676,8 +1679,10 @@ function renderChart17(canvasId, db) {
 
 // ── Deep dive lazy init ───────────────────────────────────────
 // ── Deep Dive: background prefetch ────────────────────────────
-let _deepDiveData     = null;   // cached AJAX response (all sources)
-let _deepDivePromise  = null;   // in-flight or resolved Promise
+let _deepDiveData     = null;   // cached AJAX response (charts)
+let _deepDivePromise  = null;   // in-flight or resolved Promise (charts)
+let _geminiData       = null;   // cached Gemini AI text
+let _geminiPromise    = null;   // in-flight or resolved Promise (Gemini)
 const _deepDiveRendered = { all: false, reddit: false, youtube: false };
 
 // Gemini key mapping: canvas suffix → response key
@@ -1719,28 +1724,36 @@ document.addEventListener('DOMContentLoaded', function () {
   fd.append('topic_name', el.dataset.topicName || '');
   fd.append('psi_rating', el.dataset.psiRating || '0');
 
+  // Step 1: Fetch charts (fast, <1s) ────────────────────────────
   _deepDivePromise = fetch('/trends/deep-dive', { method: 'POST', body: fd })
     .then(r => r.json())
     .then(data => {
       _deepDiveData = data;
-      _injectGeminiText(data.gemini_all    || data.gemini || {}, 'all');
-      _injectGeminiText(data.gemini_reddit || data.gemini || {}, 'reddit');
-      _injectGeminiText(data.gemini_youtube|| data.gemini || {}, 'youtube');
 
-      // Narrative report
-      if (data.narrative) {
-        const nb = document.getElementById('narrativeCard');
-        if (nb) {
-          nb.innerHTML = simpleMarkdown(data.narrative);
-          const lbl = document.getElementById('narrativeTopicLabel');
-          if (lbl) lbl.textContent = el.dataset.topicName || '';
-          nb.closest('.narrative-wrap').style.display = '';
-        }
-      }
+      // If cache returned full Gemini data, inject it immediately
+      const hasGemini = !!(
+        (data.gemini_all && Object.keys(data.gemini_all).length) ||
+        (data.gemini && Object.keys(data.gemini).length) ||
+        data.narrative
+      );
 
-      // Opinion clusters
-      if (data.clusters?.length) {
-        renderClusters('all-clusterGrid', data.clusters);
+      if (hasGemini) {
+        _geminiData = data;
+        _applyGeminiData(data, el.dataset.topicName || '');
+      } else {
+        // Step 2: Fetch Gemini insights in background (slow, 10-30s) ──
+        _geminiPromise = fetch('/trends/deep-dive/gemini', { method: 'POST', body: fd })
+          .then(r => r.json())
+          .then(gemini => {
+            _geminiData = gemini;
+            _applyGeminiData(gemini, el.dataset.topicName || '');
+            // If deep-dive panels are already open, inject chart descriptions
+            ['all', 'reddit', 'youtube'].forEach(pid => {
+              if (_deepDiveRendered[pid]) _injectDeepDiveGemini(pid, gemini);
+            });
+            return gemini;
+          })
+          .catch(err => { console.warn('[deep-dive/gemini] prefetch failed:', err); return null; });
       }
 
       return data;
@@ -1810,8 +1823,10 @@ function _initDeepDiveFromData(panelId, data) {
   renderChart15(`${p}-chart15`, db);
   renderChart17(`${p}-chart17`, db);
 
-  // Inject Gemini descriptions into chart cards (use source-specific gemini)
-  const gemini = (p === 'all' ? data.gemini_all : p === 'reddit' ? data.gemini_reddit : data.gemini_youtube) || data.gemini || {};
+  // Inject Gemini descriptions into chart cards
+  // Use _geminiData (from separate /gemini fetch) if available, else fall back to data
+  const gSource = _geminiData || data;
+  const gemini = (p === 'all' ? gSource.gemini_all : p === 'reddit' ? gSource.gemini_reddit : gSource.gemini_youtube) || gSource.gemini || {};
   document.querySelectorAll(`.chart-gemini-desc[data-canvas^="${p}-"]`).forEach(el => {
     const suffix = el.dataset.canvas.replace(/^(all|reddit|yt)-/, '');
     const key = _GEMINI_KEY[suffix];
@@ -1844,6 +1859,40 @@ function renderClusters(containerId, clusters) {
     </div>
   `).join('');
   el.closest('.cluster-wrap').style.display = '';
+}
+
+function _applyGeminiData(gemini, topicName) {
+  /* Inject all Gemini AI text (summary cards, narrative, clusters) from a response. */
+  _injectGeminiText(gemini.gemini_all || gemini.gemini || {}, 'all');
+  _injectGeminiText(gemini.gemini_reddit || {}, 'reddit');
+  _injectGeminiText(gemini.gemini_youtube || {}, 'youtube');
+
+  // Narrative report
+  if (gemini.narrative) {
+    const nb = document.getElementById('narrativeCard');
+    if (nb) {
+      nb.innerHTML = simpleMarkdown(gemini.narrative);
+      const lbl = document.getElementById('narrativeTopicLabel');
+      if (lbl) lbl.textContent = topicName;
+      nb.closest('.narrative-wrap').style.display = '';
+    }
+  }
+
+  // Opinion clusters
+  if (gemini.clusters?.length) {
+    renderClusters('all-clusterGrid', gemini.clusters);
+  }
+}
+
+function _injectDeepDiveGemini(panelId, gemini) {
+  /* Inject Gemini chart descriptions into an already-rendered deep-dive panel. */
+  const p = panelId === 'youtube' ? 'yt' : panelId;
+  const g = (p === 'all' ? gemini.gemini_all : p === 'reddit' ? gemini.gemini_reddit : gemini.gemini_youtube) || gemini.gemini || {};
+  document.querySelectorAll(`.chart-gemini-desc[data-canvas^="${p}-"]`).forEach(el => {
+    const suffix = el.dataset.canvas.replace(/^(all|reddit|yt)-/, '');
+    const key = _GEMINI_KEY[suffix];
+    if (key && g[key]) { el.textContent = g[key]; el.style.display = ''; }
+  });
 }
 
 function _injectGeminiText(gemini, tab) {

@@ -9,46 +9,10 @@ Called from:
   - seed_topics.py           (after each topic is seeded)
 """
 
-import json
 import pandas as pd
 from datetime import datetime, timedelta, timezone
-from app.services.supabase_client import admin_supabase
+from app.services.comment_service import fetch_all_comments as _fetch_all_comments, store_precomputed_cache
 
-_COMMENT_COLS = (
-    "id,topic_id,text,author,score,published_at,"
-    "sentiment_label,emotion_label,emotion_scores,confidence_score,"
-    "posts(external_post_id,title,topic_sources(source_type,source_id))"
-)
-_PAGE = 1000
-
-
-def _fetch_all_comments(topic_id: int) -> list:
-    """Paginate through all comments for a topic (mirrors main_controller logic)."""
-    rows, offset = [], 0
-    while True:
-        page = admin_supabase.table("comments") \
-            .select(_COMMENT_COLS) \
-            .eq("topic_id", topic_id) \
-            .order("id").range(offset, offset + _PAGE - 1).execute()
-        if not page.data:
-            break
-        for row in page.data:
-            post = row.pop("posts", None) or {}
-            ts   = (post.pop("topic_sources", None) or {}) if post else {}
-            row["post_id"]     = post.get("external_post_id", "")
-            row["post_title"]  = post.get("title", "")
-            row["source_type"] = ts.get("source_type", "")
-            row["source_id"]   = ts.get("source_id", "")
-        rows.extend(page.data)
-        if len(page.data) < _PAGE:
-            break
-        offset += _PAGE
-    return rows
-
-
-def _safe_json(obj) -> object:
-    """Convert numpy/non-serialisable types so postgrest-py can store the JSONB."""
-    return json.loads(json.dumps(obj, default=str))
 
 
 def precompute_and_store(topic_id: int, topic_name: str = "") -> bool:
@@ -179,7 +143,7 @@ def precompute_and_store(topic_id: int, topic_name: str = "") -> bool:
 
         # ── Build deep_dive ───────────────────────────────────────────────────
         import random as _random
-        from app.utils.gemini_insights import (
+        from app.api.gemini import (
             get_deep_dive_insights, get_narrative_report, get_opinion_clusters,
         )
 
@@ -212,10 +176,8 @@ def precompute_and_store(topic_id: int, topic_name: str = "") -> bool:
             dd_source_split = {k: round(v, 3) for k, v in counts.items()}
 
         try:
-            snap = admin_supabase.table("daily_snapshots") \
-                .select("psi_rating").eq("topic_id", topic_id) \
-                .order("snapshot_date", desc=True).limit(1).execute()
-            psi_rating = float((snap.data or [{}])[0].get("psi_rating") or 0)
+            from app.services.topic_service import get_topic_info
+            psi_rating = float(get_topic_info(topic_id).get("rating") or 0)
         except Exception:
             psi_rating = 0.0
 
@@ -269,15 +231,7 @@ def precompute_and_store(topic_id: int, topic_name: str = "") -> bool:
             "clusters":       clusters,
         }
 
-        admin_supabase.table("precomputed_charts").upsert(
-            {
-                "topic_id":     topic_id,
-                "time_windows": _safe_json(time_windows),
-                "metadata":     _safe_json(metadata),
-                "deep_dive":    _safe_json(deep_dive),
-            },
-            on_conflict="topic_id",
-        ).execute()
+        store_precomputed_cache(topic_id, time_windows, metadata, deep_dive)
         print(f"[chart_cache] Stored precomputed charts for topic_id={topic_id} ✓")
         return True
 

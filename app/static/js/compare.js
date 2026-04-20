@@ -13,21 +13,28 @@
 
   // ── Custom topic dropdown ───────────────────────────────────
   var pairs = [
-    { inputId: 'inputA', dropdownId: 'dropdownA', accentColor: '#4facfe' },
-    { inputId: 'inputB', dropdownId: 'dropdownB', accentColor: '#a855f7' },
+    { inputId: 'inputA', dropdownId: 'dropdownA', siblingId: 'inputB', accentColor: '#4facfe' },
+    { inputId: 'inputB', dropdownId: 'dropdownB', siblingId: 'inputA', accentColor: '#a855f7' },
   ];
 
-  pairs.forEach(function ({ inputId, dropdownId, accentColor }) {
+  pairs.forEach(function ({ inputId, dropdownId, siblingId, accentColor }) {
     const input    = document.getElementById(inputId);
     const dropdown = document.getElementById(dropdownId);
     if (!input || !dropdown) return;
 
+    const sibling  = document.getElementById(siblingId);
+
     let activeIdx = -1;
 
     function getFiltered(q) {
-      const lq = q.trim().toLowerCase();
-      if (!lq) return SUGGESTIONS;
-      return SUGGESTIONS.filter(s => s.name.toLowerCase().includes(lq));
+      const lq  = q.trim().toLowerCase();
+      // Always exclude whatever the sibling field currently holds
+      const sibVal = (sibling ? sibling.value : '').trim().toLowerCase();
+      let base = sibVal
+        ? SUGGESTIONS.filter(s => s.name.toLowerCase() !== sibVal)
+        : SUGGESTIONS;
+      if (!lq) return base;
+      return base.filter(s => s.name.toLowerCase().includes(lq));
     }
 
     function renderDropdown(items) {

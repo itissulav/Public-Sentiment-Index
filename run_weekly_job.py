@@ -20,14 +20,6 @@ load_dotenv()
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-PREDEFINED_TOPICS = [
-    "Donald Trump",
-    "Elon Musk",
-    "Gaza Conflict",
-    "AI Technology",
-    "Climate Change",
-]
-
 REDDIT_TARGET  = 500   # max comments per topic from Reddit
 YOUTUBE_TARGET = 500   # max comments per topic from YouTube
 DAYS_BACK      = 7     # only fetch content published in the last 7 days
@@ -145,7 +137,7 @@ def run_topic(topic_name: str):
         return
 
     from app.api.youtube import search_videos, get_video_comments
-    from app.utils.gemini_sources import get_sources_for_topic
+    from app.api.gemini import get_sources_for_topic
 
     print(f"[youtube] Getting search queries for '{topic_name}' ...")
     sources = get_sources_for_topic(topic_name)
@@ -178,6 +170,7 @@ def run_topic(topic_name: str):
         try:
             df_yt = get_video_comments(
                 video_id=vid_id,
+                video_title=video["title"],
                 api_key=youtube_api_key,
                 max_comments=min(remaining, 200),
             )
@@ -212,11 +205,31 @@ def run_topic(topic_name: str):
 if __name__ == "__main__":
     from datetime import datetime
     print(f"Weekly job started at {datetime.utcnow().isoformat()}Z")
-    print(f"Topics: {PREDEFINED_TOPICS}")
+
+    # Fetch the predefined topic list from the DB so admin-added topics are
+    # refreshed weekly automatically — no code edit needed.
+    try:
+        topics_res = (
+            supabase.table("topics")
+            .select("name")
+            .is_("user_id", "null")
+            .order("name")
+            .execute()
+        )
+        predefined_topic_names = [r["name"] for r in (topics_res.data or [])]
+    except Exception as exc:
+        print(f"CRITICAL: failed to load predefined topics from DB: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    if not predefined_topic_names:
+        print("[weekly] No predefined topics in DB — nothing to do.")
+        sys.exit(0)
+
+    print(f"Topics: {predefined_topic_names}")
     print(f"Days back: {DAYS_BACK}, Reddit target: {REDDIT_TARGET}, YouTube target: {YOUTUBE_TARGET}")
 
     failed = []
-    for topic in PREDEFINED_TOPICS:
+    for topic in predefined_topic_names:
         try:
             run_topic(topic)
         except Exception as exc:

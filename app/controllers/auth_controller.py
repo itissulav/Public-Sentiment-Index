@@ -16,7 +16,7 @@ def login():
 
         if result.get("success"):
             session["user"] = user.to_dict()
-            return redirect(url_for("main.home"))
+            return redirect(url_for("home.home"))
         else:
             flash(result.get("error", "An unknown error occurred."))
             return redirect(url_for("auth.login"))
@@ -39,7 +39,7 @@ def register():
 
         if response.get("success"):
             session["user"] = user.to_dict()
-            return redirect(url_for("main.home"))
+            return redirect(url_for("home.home"))
         else:
             flash(response.get("error", "Registration failed."))
             return redirect(url_for("auth.register"))
@@ -54,5 +54,5 @@ def logout():
     if not response.get("success"):
         flash(response.get("error", "Error logging out."))
         
-    return render_template("home.html")
+    return redirect(url_for("home.home"))
 
